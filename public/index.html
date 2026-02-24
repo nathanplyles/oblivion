@@ -6,6 +6,9 @@
 <title>void</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="/scram/scramjet.all.js"></script>
+<script src="/baremux/worker.js"></script>
+<script src="/register-sw.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -273,6 +276,7 @@
     height: 0;
     transition: height 0.3s ease;
     box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 40px rgba(0,0,0,0.5);
+    position: relative;
   }
 
   .proxy-frame-wrap.open { height: 420px; }
@@ -316,7 +320,15 @@
 
   .proxy-mini-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.1); }
 
-  .proxy-frame-wrap iframe { width: 100%; height: calc(100% - 41px); border: none; cursor: auto; }
+  #proxyFrame {
+    width: 100%;
+    height: calc(100% - 41px);
+    border: none;
+    cursor: auto;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+  }
 
   .games-panel { width: min(860px, 95vw); }
 
@@ -596,12 +608,20 @@
 </div>
 
 <script>
-const PROXY_BASE = 'https://scramjet-app-ri6z.onrender.com';
-const SJ_PREFIX = '/scramjet/';
-const UV_PREFIX = '/uv/service/';
+// --- Scramjet setup ---
+const { ScramjetController } = $scramjetLoadController();
+const scramjet = new ScramjetController({
+  files: {
+    wasm: '/scram/scramjet.wasm.wasm',
+    all: '/scram/scramjet.all.js',
+    sync: '/scram/scramjet.sync.js',
+  },
+});
+scramjet.init('/sw.js');
 
-let currentEngine = 'scramjet';
+const connection = new BareMux.BareMuxConnection('/baremux/worker.js');
 
+// --- Canvas / cursor ---
 const canvas = document.getElementById('bg');
 const ctx = canvas.getContext('2d');
 const glowEl = document.getElementById('cursorGlow');
@@ -731,6 +751,7 @@ window.addEventListener('mouseleave', () => {
 
 resize(); initParticles(); draw();
 
+// --- Tabs ---
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const current = document.querySelector('.panel.active');
@@ -750,25 +771,21 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
+// --- Engine toggle (UI only, scramjet is always used) ---
 document.querySelectorAll('.engine-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.engine-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    currentEngine = btn.dataset.engine;
   });
 });
 
-function buildProxyUrl(url) {
-  if (currentEngine === 'scramjet') {
-    return PROXY_BASE + SJ_PREFIX + encodeURIComponent(url);
-  } else {
-    return PROXY_BASE + UV_PREFIX + encodeURIComponent(url);
-  }
-}
+// --- Proxy navigation using ScramjetController ---
+let sjFrame = null;
 
-function navigate() {
+async function navigate() {
   let val = document.getElementById('proxyUrl').value.trim();
   if (!val) return;
+
   document.getElementById('errMsg').style.display = 'none';
 
   if (!val.startsWith('http://') && !val.startsWith('https://')) {
@@ -777,13 +794,42 @@ function navigate() {
       : 'https://www.google.com/search?q=' + encodeURIComponent(val);
   }
 
-  const proxyUrl = buildProxyUrl(val);
-  const frame = document.getElementById('proxyFrame');
-  const wrap = document.getElementById('frameWrap');
+  const goBtn = document.getElementById('goBtn');
+  goBtn.textContent = 'loading...';
+  goBtn.disabled = true;
 
+  try {
+    await registerSW();
+  } catch (err) {
+    document.getElementById('errMsg').textContent = 'Service worker failed: ' + err.message;
+    document.getElementById('errMsg').style.display = 'block';
+    goBtn.textContent = 'go →';
+    goBtn.disabled = false;
+    return;
+  }
+
+  const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
+  if ((await connection.getTransport()) !== '/libcurl/index.mjs') {
+    await connection.setTransport('/libcurl/index.mjs', [{ websocket: wispUrl }]);
+  }
+
+  const frameWrap = document.getElementById('frameWrap');
   document.getElementById('frameUrlBar').value = val;
-  frame.src = proxyUrl;
-  wrap.classList.add('open');
+  frameWrap.classList.add('open');
+
+  // Remove old frame if exists
+  const oldFrame = document.getElementById('proxyFrame');
+  if (oldFrame) oldFrame.remove();
+
+  // Create Scramjet frame
+  sjFrame = scramjet.createFrame();
+  sjFrame.frame.id = 'proxyFrame';
+  sjFrame.frame.style.cssText = 'width:100%;height:calc(100% - 41px);border:none;position:absolute;bottom:0;left:0;cursor:auto;';
+  frameWrap.appendChild(sjFrame.frame);
+  sjFrame.go(val);
+
+  goBtn.textContent = 'go →';
+  goBtn.disabled = false;
 }
 
 document.getElementById('goBtn').addEventListener('click', navigate);
@@ -791,17 +837,26 @@ document.getElementById('proxyUrl').addEventListener('keydown', e => { if (e.key
 
 document.getElementById('frameClose').addEventListener('click', () => {
   const wrap = document.getElementById('frameWrap');
-  const frame = document.getElementById('proxyFrame');
   wrap.classList.remove('open');
-  frame.src = '';
+  const f = document.getElementById('proxyFrame');
+  if (f) f.remove();
+  // Re-add empty placeholder iframe
+  const newFrame = document.createElement('iframe');
+  newFrame.id = 'proxyFrame';
+  newFrame.allow = 'fullscreen';
+  newFrame.style.cssText = 'width:100%;height:calc(100% - 41px);border:none;position:absolute;bottom:0;left:0;cursor:auto;';
+  wrap.appendChild(newFrame);
   document.getElementById('frameUrlBar').value = '';
+  sjFrame = null;
 });
 
 document.getElementById('frameNewTab').addEventListener('click', () => {
-  const frame = document.getElementById('proxyFrame');
-  if (frame.src) window.open(frame.src, '_blank');
+  if (sjFrame && sjFrame.frame.src) {
+    window.open(sjFrame.frame.src, '_blank');
+  }
 });
 
+// --- Games ---
 const COVER_URL = 'https://cdn.jsdelivr.net/gh/gn-math/covers@main';
 const HTML_URL = 'https://cdn.jsdelivr.net/gh/gn-math/html@main';
 const DISCORD_URL = 'https://discord.gg/gmb2RegMTd';
