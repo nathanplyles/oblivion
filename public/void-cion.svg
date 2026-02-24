@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#111113"/>
+      <stop offset="100%" stop-color="#09090b"/>
+    </radialGradient>
+    <radialGradient id="centerGlow" cx="50%" cy="55%" r="48%">
+      <stop offset="0%" stop-color="#c8f0a0" stop-opacity="0.07"/>
+      <stop offset="100%" stop-color="#c8f0a0" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="dotglow">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="rounded">
+      <rect width="512" height="512" rx="108"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="108" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+
+  <!-- Center glow -->
+  <ellipse cx="256" cy="290" rx="200" ry="185" fill="url(#centerGlow)"/>
+
+  <g clip-path="url(#rounded)">
+
+    <!-- Particle lines -->
+    <g stroke="rgba(200,240,160,0.07)" stroke-width="0.7" fill="none">
+      <!-- Outer ring -->
+      <line x1="118" y1="155" x2="194" y2="122"/>
+      <line x1="194" y1="122" x2="270" y2="108"/>
+      <line x1="270" y1="108" x2="348" y2="130"/>
+      <line x1="348" y1="130" x2="405" y2="182"/>
+      <line x1="405" y1="182" x2="420" y2="268"/>
+      <line x1="420" y1="268" x2="394" y2="358"/>
+      <line x1="394" y1="358" x2="324" y2="415"/>
+      <line x1="324" y1="415" x2="230" y2="428"/>
+      <line x1="230" y1="428" x2="148" y2="396"/>
+      <line x1="148" y1="396" x2="100" y2="326"/>
+      <line x1="100" y1="326" x2="90"  y2="236"/>
+      <line x1="90"  y1="236" x2="118" y2="155"/>
+      <!-- Cross connections - spread out naturally -->
+      <line x1="194" y1="122" x2="394" y2="358"/>
+      <line x1="348" y1="130" x2="148" y2="396"/>
+      <line x1="118" y1="155" x2="405" y2="182"/>
+      <line x1="270" y1="108" x2="420" y2="268"/>
+      <line x1="90"  y1="236" x2="348" y2="130"/>
+      <line x1="100" y1="326" x2="405" y2="182"/>
+      <line x1="194" y1="122" x2="100" y2="326"/>
+      <line x1="230" y1="428" x2="118" y2="155"/>
+      <line x1="324" y1="415" x2="90"  y2="236"/>
+      <line x1="420" y1="268" x2="148" y2="396"/>
+      <line x1="270" y1="108" x2="324" y2="415"/>
+      <line x1="90"  y1="236" x2="394" y2="358"/>
+    </g>
+
+    <!-- Main particles -->
+    <g fill="rgba(200,240,160,0.72)" filter="url(#dotglow)">
+      <circle cx="118" cy="155" r="2.2"/>
+      <circle cx="194" cy="122" r="2.8"/>
+      <circle cx="270" cy="108" r="2.0"/>
+      <circle cx="348" cy="130" r="2.4"/>
+      <circle cx="405" cy="182" r="2.0"/>
+      <circle cx="420" cy="268" r="2.6"/>
+      <circle cx="394" cy="358" r="2.0"/>
+      <circle cx="324" cy="415" r="2.4"/>
+      <circle cx="230" cy="428" r="2.0"/>
+      <circle cx="148" cy="396" r="2.2"/>
+      <circle cx="100" cy="326" r="2.0"/>
+      <circle cx="90"  cy="236" r="2.4"/>
+    </g>
+
+    <!-- Small ambient particles, no lines -->
+    <g fill="rgba(200,240,160,0.28)">
+      <circle cx="216" cy="152" r="1.1"/>
+      <circle cx="374" cy="228" r="1.0"/>
+      <circle cx="360" cy="378" r="1.2"/>
+      <circle cx="164" cy="348" r="1.0"/>
+      <circle cx="136" cy="200" r="1.1"/>
+      <circle cx="300" cy="440" r="1.0"/>
+      <circle cx="448" cy="308" r="1.1"/>
+      <circle cx="72"  cy="278" r="1.0"/>
+      <circle cx="308" cy="84"  r="1.1"/>
+      <circle cx="438" cy="140" r="1.0"/>
+      <circle cx="460" cy="210" r="0.9"/>
+      <circle cx="52"  cy="180" r="0.9"/>
+      <circle cx="172" cy="468" r="0.9"/>
+      <circle cx="430" cy="400" r="0.9"/>
+    </g>
+
+    <!-- V mark — starts at y=188 so top is safely inside the icon -->
+    <g filter="url(#glow)">
+      <path d="M 162 188 L 256 368 L 350 188"
+            fill="none"
+            stroke="#e8e8e8"
+            stroke-width="27"
+            stroke-linecap="butt"
+            stroke-linejoin="miter"
+            stroke-miterlimit="12"/>
+    </g>
+
+  </g>
+</svg>
