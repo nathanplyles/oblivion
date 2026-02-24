@@ -6,9 +6,6 @@
 <title>void</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
-<script src="/scram/scramjet.all.js"></script>
-<script src="/baremux/worker.js"></script>
-<script src="/register-sw.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -56,7 +53,7 @@
     height: 280px;
     border-radius: 50%;
     pointer-events: none;
-    z-index: 0;
+    z-index: 9998;
     transform: translate(-50%, -50%);
     background: radial-gradient(circle, rgba(220,230,255,0.032) 0%, transparent 70%);
     transition: opacity 0.3s ease;
@@ -70,7 +67,7 @@
     border-radius: 50%;
     background: rgba(255,255,255,0.9);
     pointer-events: none;
-    z-index: 1000;
+    z-index: 9999;
     transform: translate(-50%, -50%);
     box-shadow: 0 0 6px rgba(255,255,255,0.4);
     transition: opacity 0.3s;
@@ -288,6 +285,8 @@
     padding: 8px 10px;
     border-bottom: 1px solid var(--border);
     background: rgba(13,13,15,0.9);
+    position: relative;
+    z-index: 2;
   }
 
   .proxy-frame-url {
@@ -320,14 +319,19 @@
 
   .proxy-mini-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.1); }
 
-  #proxyFrame {
+  #proxyFrameContainer {
+    position: absolute;
+    top: 41px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  #proxyFrameContainer iframe {
     width: 100%;
-    height: calc(100% - 41px);
+    height: 100%;
     border: none;
     cursor: auto;
-    position: absolute;
-    bottom: 0;
-    left: 0;
   }
 
   .games-panel { width: min(860px, 95vw); }
@@ -574,7 +578,7 @@
       <input class="proxy-input" id="proxyUrl" type="text" placeholder="enter a url or search..." autocomplete="off" spellcheck="false">
       <button class="proxy-btn" id="goBtn">go →</button>
     </div>
-    <div class="error-msg" id="errMsg">couldn't load that page — try a different url or engine</div>
+    <div class="error-msg" id="errMsg"></div>
     <div class="proxy-hint">press enter to navigate</div>
     <div class="proxy-frame-wrap" id="frameWrap">
       <div class="proxy-frame-toolbar">
@@ -582,7 +586,7 @@
         <button class="proxy-mini-btn" id="frameNewTab">new tab ↗</button>
         <button class="proxy-mini-btn" id="frameClose">close ×</button>
       </div>
-      <iframe id="proxyFrame" allow="fullscreen"></iframe>
+      <div id="proxyFrameContainer"></div>
     </div>
   </div>
 
@@ -607,8 +611,11 @@
   </div>
 </div>
 
-<script>
-// --- Scramjet setup ---
+<script src="/scram/scramjet.all.js"></script>
+<script src="/register-sw.js"></script>
+<script type="module">
+import { BareMuxConnection } from '/baremux/index.mjs';
+
 const { ScramjetController } = $scramjetLoadController();
 const scramjet = new ScramjetController({
   files: {
@@ -619,7 +626,7 @@ const scramjet = new ScramjetController({
 });
 scramjet.init('/sw.js');
 
-const connection = new BareMux.BareMuxConnection('/baremux/worker.js');
+const connection = new BareMuxConnection('/baremux/worker.js');
 
 // --- Canvas / cursor ---
 const canvas = document.getElementById('bg');
@@ -742,11 +749,13 @@ function draw() {
 window.addEventListener('resize', () => { resize(); initParticles(); });
 window.addEventListener('mousemove', e => {
   mouse.x = e.clientX; mouse.y = e.clientY;
-  glowEl.style.opacity = '1'; dotEl.style.opacity = '1';
+  glowEl.style.opacity = '1';
+  dotEl.style.opacity = '1';
 });
 window.addEventListener('mouseleave', () => {
   mouse.x = -9999; mouse.y = -9999;
-  glowEl.style.opacity = '0'; dotEl.style.opacity = '0';
+  glowEl.style.opacity = '0';
+  dotEl.style.opacity = '0';
 });
 
 resize(); initParticles(); draw();
@@ -771,7 +780,6 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
-// --- Engine toggle (UI only, scramjet is always used) ---
 document.querySelectorAll('.engine-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.engine-btn').forEach(b => b.classList.remove('active'));
@@ -779,14 +787,15 @@ document.querySelectorAll('.engine-btn').forEach(btn => {
   });
 });
 
-// --- Proxy navigation using ScramjetController ---
+// --- Proxy ---
 let sjFrame = null;
 
 async function navigate() {
   let val = document.getElementById('proxyUrl').value.trim();
   if (!val) return;
 
-  document.getElementById('errMsg').style.display = 'none';
+  const errMsg = document.getElementById('errMsg');
+  errMsg.style.display = 'none';
 
   if (!val.startsWith('http://') && !val.startsWith('https://')) {
     val = val.includes('.') && !val.includes(' ')
@@ -801,59 +810,52 @@ async function navigate() {
   try {
     await registerSW();
   } catch (err) {
-    document.getElementById('errMsg').textContent = 'Service worker failed: ' + err.message;
-    document.getElementById('errMsg').style.display = 'block';
+    errMsg.textContent = 'SW error: ' + err.message;
+    errMsg.style.display = 'block';
     goBtn.textContent = 'go →';
     goBtn.disabled = false;
     return;
   }
 
-  const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
-  if ((await connection.getTransport()) !== '/libcurl/index.mjs') {
-    await connection.setTransport('/libcurl/index.mjs', [{ websocket: wispUrl }]);
+  try {
+    const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
+    if ((await connection.getTransport()) !== '/libcurl/index.mjs') {
+      await connection.setTransport('/libcurl/index.mjs', [{ websocket: wispUrl }]);
+    }
+
+    const frameWrap = document.getElementById('frameWrap');
+    const container = document.getElementById('proxyFrameContainer');
+    document.getElementById('frameUrlBar').value = val;
+    frameWrap.classList.add('open');
+    container.innerHTML = '';
+
+    sjFrame = scramjet.createFrame();
+    sjFrame.frame.style.cssText = 'width:100%;height:100%;border:none;cursor:auto;';
+    container.appendChild(sjFrame.frame);
+    sjFrame.go(val);
+  } catch (err) {
+    errMsg.textContent = "couldn't load that page — try a different url";
+    errMsg.style.display = 'block';
   }
-
-  const frameWrap = document.getElementById('frameWrap');
-  document.getElementById('frameUrlBar').value = val;
-  frameWrap.classList.add('open');
-
-  // Remove old frame if exists
-  const oldFrame = document.getElementById('proxyFrame');
-  if (oldFrame) oldFrame.remove();
-
-  // Create Scramjet frame
-  sjFrame = scramjet.createFrame();
-  sjFrame.frame.id = 'proxyFrame';
-  sjFrame.frame.style.cssText = 'width:100%;height:calc(100% - 41px);border:none;position:absolute;bottom:0;left:0;cursor:auto;';
-  frameWrap.appendChild(sjFrame.frame);
-  sjFrame.go(val);
 
   goBtn.textContent = 'go →';
   goBtn.disabled = false;
 }
 
 document.getElementById('goBtn').addEventListener('click', navigate);
-document.getElementById('proxyUrl').addEventListener('keydown', e => { if (e.key === 'Enter') navigate(); });
+document.getElementById('proxyUrl').addEventListener('keydown', e => {
+  if (e.key === 'Enter') navigate();
+});
 
 document.getElementById('frameClose').addEventListener('click', () => {
-  const wrap = document.getElementById('frameWrap');
-  wrap.classList.remove('open');
-  const f = document.getElementById('proxyFrame');
-  if (f) f.remove();
-  // Re-add empty placeholder iframe
-  const newFrame = document.createElement('iframe');
-  newFrame.id = 'proxyFrame';
-  newFrame.allow = 'fullscreen';
-  newFrame.style.cssText = 'width:100%;height:calc(100% - 41px);border:none;position:absolute;bottom:0;left:0;cursor:auto;';
-  wrap.appendChild(newFrame);
+  document.getElementById('frameWrap').classList.remove('open');
+  document.getElementById('proxyFrameContainer').innerHTML = '';
   document.getElementById('frameUrlBar').value = '';
   sjFrame = null;
 });
 
 document.getElementById('frameNewTab').addEventListener('click', () => {
-  if (sjFrame && sjFrame.frame.src) {
-    window.open(sjFrame.frame.src, '_blank');
-  }
+  if (sjFrame && sjFrame.frame.src) window.open(sjFrame.frame.src, '_blank');
 });
 
 // --- Games ---
@@ -873,7 +875,6 @@ async function loadGames() {
     const res = await fetch('https://cdn.jsdelivr.net/gh/gn-math/assets@main/zones.json?t=' + Date.now());
     const raw = await res.json();
     allZones = raw.filter(z => !z.name.startsWith('[!]'));
-
     try {
       const popRes = await fetch('https://data.jsdelivr.com/v1/stats/packages/gh/gn-math/html@main/files?period=year');
       const popData = await popRes.json();
@@ -882,7 +883,6 @@ async function loadGames() {
         if (match) popularityData[parseInt(match[1])] = file.hits.total;
       });
     } catch (e) {}
-
     renderGames(allZones);
   } catch (e) {
     document.getElementById('gamesGrid').innerHTML = '<div class="games-loading">failed to load games</div>';
@@ -902,13 +902,9 @@ function renderGames(zones) {
   const sortBy = document.getElementById('gamesSort').value;
   const sorted = sortZones(zones, sortBy);
   const query = document.getElementById('gamesSearch').value.toLowerCase();
-
   grid.innerHTML = '';
-
   if (!query) SPECIAL_CARDS.forEach(card => grid.appendChild(makeSpecialCard(card)));
-
   if (!sorted.length) { grid.innerHTML += '<div class="games-loading">no games found</div>'; return; }
-
   sorted.forEach(zone => grid.appendChild(makeGameCard(zone)));
 }
 
@@ -949,7 +945,6 @@ async function openGame(zone) {
   const frame = document.getElementById('gameFrame');
   document.getElementById('gameViewerTitle').textContent = zone.name;
   document.getElementById('gameViewerAuthor').textContent = zone.author ? 'by ' + zone.author : '';
-
   if (zone.url.startsWith('http')) {
     frame.src = zone.url;
   } else {
@@ -960,14 +955,12 @@ async function openGame(zone) {
       frame.srcdoc = html;
     } catch (e) { frame.src = url; }
   }
-
   viewer.classList.add('open');
 }
 
 document.getElementById('gameCloseBtn').addEventListener('click', () => {
-  const viewer = document.getElementById('gameViewer');
+  document.getElementById('gameViewer').classList.remove('open');
   const frame = document.getElementById('gameFrame');
-  viewer.classList.remove('open');
   frame.src = ''; frame.srcdoc = '';
 });
 
@@ -988,8 +981,7 @@ document.getElementById('gameNewTabBtn').addEventListener('click', () => {
 });
 
 document.getElementById('gamesSearch').addEventListener('input', e => {
-  const filtered = allZones.filter(z => z.name.toLowerCase().includes(e.target.value.toLowerCase()));
-  renderGames(filtered);
+  renderGames(allZones.filter(z => z.name.toLowerCase().includes(e.target.value.toLowerCase())));
 });
 
 document.getElementById('gamesSort').addEventListener('change', () => {
