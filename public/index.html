@@ -536,6 +536,59 @@
   }
 
   .error-msg { margin-top: 8px; color: #f87171; font-size: 11px; text-align: center; display: none; }
+
+  .cloak-panel { width: min(480px, 92vw); }
+
+  .cloak-label {
+    font-size: 10px;
+    color: #333;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    padding-left: 2px;
+  }
+
+  .cloak-presets {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .cloak-preset {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 6px;
+    background: rgba(13,13,15,0.85);
+    border: 1px solid var(--border);
+    border-top-color: rgba(255,255,255,0.07);
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: none;
+    transition: all 0.15s;
+    letter-spacing: 0.03em;
+    backdrop-filter: blur(16px);
+  }
+
+  .cloak-preset img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    border-radius: 3px;
+  }
+
+  .cloak-preset:hover { color: #aaa; border-color: rgba(255,255,255,0.1); }
+
+  .cloak-preset.active {
+    background: rgba(200,240,160,0.07);
+    border-color: rgba(200,240,160,0.2);
+    border-top-color: rgba(200,240,160,0.3);
+    color: var(--accent);
+  }
 </style>
 </head>
 <body>
@@ -565,6 +618,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="proxy">proxy</button>
     <button class="tab" data-tab="games">games</button>
+    <button class="tab" data-tab="cloak">cloak</button>
   </div>
 
   <div class="panel proxy-panel active" id="tab-proxy">
@@ -604,6 +658,61 @@
         <div class="games-loading">loading games...</div>
       </div>
     </div>
+  </div>
+
+
+  <div class="panel cloak-panel" id="tab-cloak">
+    <div class="cloak-label">tab name</div>
+    <div class="proxy-bar" style="margin-bottom:10px;">
+      <span class="proxy-icon" style="font-size:13px;">✎</span>
+      <input class="proxy-input" id="cloakTitle" type="text" placeholder="e.g. Google Classroom" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="cloak-label">favicon preset</div>
+    <div class="cloak-presets" id="cloakPresets">
+      <button class="cloak-preset" data-title="Google Classroom" data-icon="https://ssl.gstatic.com/classroom/favicon.png">
+        <img src="https://ssl.gstatic.com/classroom/favicon.png" alt=""> classroom
+      </button>
+      <button class="cloak-preset" data-title="Google Docs" data-icon="https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico">
+        <img src="https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico" alt=""> docs
+      </button>
+      <button class="cloak-preset" data-title="Google Drive" data-icon="https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png">
+        <img src="https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png" alt=""> drive
+      </button>
+      <button class="cloak-preset" data-title="Khan Academy" data-icon="https://www.khanacademy.org/favicon.ico">
+        <img src="https://www.khanacademy.org/favicon.ico" alt=""> khan academy
+      </button>
+      <button class="cloak-preset" data-title="Quizlet" data-icon="https://quizlet.com/favicon.ico">
+        <img src="https://quizlet.com/favicon.ico" alt=""> quizlet
+      </button>
+      <button class="cloak-preset" data-title="Duolingo" data-icon="https://www.duolingo.com/favicon.ico">
+        <img src="https://www.duolingo.com/favicon.ico" alt=""> duolingo
+      </button>
+      <button class="cloak-preset" data-title="Desmos" data-icon="https://www.desmos.com/favicon.ico">
+        <img src="https://www.desmos.com/favicon.ico" alt=""> desmos
+      </button>
+      <button class="cloak-preset" data-title="Clever | Portal" data-icon="https://clever.com/favicon.ico">
+        <img src="https://clever.com/favicon.ico" alt=""> clever
+      </button>
+      <button class="cloak-preset" data-title="Choose a subject, i-Ready" data-icon="https://login.i-ready.com/favicon.ico">
+        <img src="https://login.i-ready.com/favicon.ico" alt=""> i-ready
+      </button>
+      <button class="cloak-preset" data-title="NoodleTools - Projects" data-icon="https://my.noodletools.com/favicon.ico">
+        <img src="https://my.noodletools.com/favicon.ico" alt=""> noodletools
+      </button>
+      <button class="cloak-preset" data-title="Schoology" data-icon="https://www.schoology.com/favicon.ico">
+        <img src="https://www.schoology.com/favicon.ico" alt=""> schoology
+      </button>
+      <button class="cloak-preset active" data-title="void" data-icon="/void-icon.svg">
+        <img src="/void-icon.svg" alt=""> void
+      </button>
+    </div>
+    <div class="cloak-label" style="margin-top:14px;">custom icon url</div>
+    <div class="proxy-bar" style="margin-bottom:12px;">
+      <span class="proxy-icon" style="font-size:13px;">🔗</span>
+      <input class="proxy-input" id="cloakIcon" type="text" placeholder="https://example.com/favicon.ico" autocomplete="off" spellcheck="false">
+    </div>
+    <button class="proxy-btn" id="applyCloak" style="width:100%;margin:0;padding:12px;">apply cloak</button>
+    <button class="proxy-btn" id="resetCloak" style="width:100%;margin:4px 0 0;padding:10px;color:#555;">reset to void</button>
   </div>
 
   <div class="status-row">
@@ -856,6 +965,74 @@ document.getElementById('frameClose').addEventListener('click', () => {
 
 document.getElementById('frameNewTab').addEventListener('click', () => {
   if (sjFrame && sjFrame.frame.src) window.open(sjFrame.frame.src, '_blank');
+});
+
+
+// --- Cloaking ---
+let currentCloakIcon = '/void-icon.svg';
+
+function setFavicon(url) {
+  let link = document.querySelector("link[rel~='icon']");
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+  link.href = url;
+}
+
+// Load saved cloak on start
+const savedTitle = localStorage.getItem('voidCloakTitle');
+const savedIcon = localStorage.getItem('voidCloakIcon');
+if (savedTitle) document.title = savedTitle;
+if (savedIcon) { setFavicon(savedIcon); currentCloakIcon = savedIcon; }
+
+document.querySelectorAll('.cloak-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cloak-preset').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentCloakIcon = btn.dataset.icon;
+    document.getElementById('cloakTitle').value = btn.dataset.title;
+    document.getElementById('cloakIcon').value = '';
+  });
+});
+
+document.getElementById('cloakIcon').addEventListener('input', e => {
+  if (e.target.value.trim()) {
+    document.querySelectorAll('.cloak-preset').forEach(b => b.classList.remove('active'));
+    currentCloakIcon = e.target.value.trim();
+  }
+});
+
+document.getElementById('applyCloak').addEventListener('click', () => {
+  const title = document.getElementById('cloakTitle').value.trim();
+  const iconInput = document.getElementById('cloakIcon').value.trim();
+  const icon = iconInput || currentCloakIcon;
+
+  if (title) {
+    document.title = title;
+    localStorage.setItem('voidCloakTitle', title);
+  }
+  if (icon) {
+    setFavicon(icon);
+    localStorage.setItem('voidCloakIcon', icon);
+  }
+
+  const btn = document.getElementById('applyCloak');
+  btn.textContent = 'applied ✓';
+  setTimeout(() => btn.textContent = 'apply cloak', 1500);
+});
+
+document.getElementById('resetCloak').addEventListener('click', () => {
+  document.title = 'void';
+  setFavicon('/void-icon.svg');
+  localStorage.removeItem('voidCloakTitle');
+  localStorage.removeItem('voidCloakIcon');
+  document.getElementById('cloakTitle').value = '';
+  document.getElementById('cloakIcon').value = '';
+  document.querySelectorAll('.cloak-preset').forEach(b => b.classList.remove('active'));
+  document.querySelector('.cloak-preset[data-title="void"]').classList.add('active');
+  currentCloakIcon = '/void-icon.svg';
 });
 
 // --- Games ---
