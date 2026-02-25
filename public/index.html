@@ -666,6 +666,18 @@
     padding: 10px 12px;
     cursor: none;
     backdrop-filter: blur(16px);
+    transition: opacity 0.2s ease, transform 0.2s ease, max-width 0.2s ease;
+    opacity: 1;
+    max-width: 120px;
+    overflow: hidden;
+  }
+  .games-sort.hidden {
+    opacity: 0;
+    pointer-events: none;
+    max-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-width: 0;
   }
 
   .games-grid-wrap {
@@ -750,6 +762,43 @@
     background: var(--surface2);
   }
 
+  /* Seraph wide card layout */
+  .games-grid.seraph-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+  }
+  .game-card.seraph-card {
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+  .game-card.seraph-card img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+    background: var(--surface2);
+  }
+  .game-card.seraph-card .game-card-name {
+    text-align: left;
+    padding: 7px 9px 8px;
+    font-size: 11px;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .game-card.seraph-card:hover .game-card-name { color: var(--text); }
+  /* Smooth grid transition */
+  .games-grid {
+    transition: opacity 0.18s ease;
+  }
+  .games-grid.fading {
+    opacity: 0;
+  }
+
   .games-loading {
     text-align: center;
     color: #333;
@@ -827,6 +876,64 @@
   }
 
   .error-msg { margin-top: 8px; color: #f87171; font-size: 11px; text-align: center; display: none; }
+
+  /* ── Toast notifications ── */
+  #toastContainer {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    background: rgba(13,13,15,0.92);
+    border: 1px solid var(--border);
+    border-top-color: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    color: #888;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .toast-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .toast.info .toast-dot  { background: rgba(200,240,160,0.7); box-shadow: 0 0 6px rgba(200,240,160,0.4); }
+  .toast.info             { border-color: rgba(200,240,160,0.1); color: #aaa; }
+  .toast.success .toast-dot { background: #c8f0a0; box-shadow: 0 0 6px rgba(200,240,160,0.6); }
+  .toast.success          { border-color: rgba(200,240,160,0.2); color: var(--accent); }
+  .toast.error .toast-dot { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.4); }
+  .toast.error            { border-color: rgba(248,113,113,0.15); color: #f87171; }
+  .toast.warn .toast-dot  { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.4); }
+  .toast.warn             { border-color: rgba(251,191,36,0.15); color: #fbbf24; }
+
 
   /* panic flash */
   .panic-flash {
@@ -1034,6 +1141,8 @@
   </div>
 </div>
 
+<div id="toastContainer"></div>
+
 <script src="/scram/scramjet.all.js"></script>
 <script src="/register-sw.js"></script>
 <script type="module">
@@ -1050,6 +1159,37 @@ const scramjet = new ScramjetController({
 scramjet.init('/sw.js');
 
 const connection = new BareMuxConnection('/baremux/worker.js');
+
+
+// ─── TOAST NOTIFICATIONS ─────────────────────────────────────────────
+const toastTimers = new Map();
+function toast(msg, type = 'info', duration = 3000) {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="toast-dot"></span>${msg}`;
+  container.appendChild(el);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => el.classList.add('show'));
+  });
+  const t = setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 220);
+  }, duration);
+  toastTimers.set(el, t);
+}
+
+// Show scramjet ready status on load
+(async () => {
+  try {
+    toast('scramjet initializing...', 'info', 2000);
+    await navigator.serviceWorker.register('/sw.js');
+    setTimeout(() => toast('scramjet ready', 'success', 2500), 800);
+  } catch(e) {
+    toast('scramjet failed to initialize', 'error', 4000);
+  }
+})();
+
 
 // ─── BACKGROUND SYSTEM ───────────────────────────────────────────────
 const canvas = document.getElementById('bg');
@@ -1637,6 +1777,7 @@ async function navigate() {
   try {
     await registerSW();
   } catch (err) {
+    toast('service worker failed', 'error', 3000);
     errMsg.textContent = 'SW error: ' + err.message;
     errMsg.style.display = 'block';
     goBtn.textContent = 'go →';
@@ -1646,7 +1787,9 @@ async function navigate() {
   try {
     const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
     if ((await connection.getTransport()) !== '/libcurl/index.mjs') {
+      toast('connecting transport...', 'info', 1500);
       await connection.setTransport('/libcurl/index.mjs', [{ websocket: wispUrl }]);
+      toast('transport connected', 'success', 2000);
     }
     const frameWrap = document.getElementById('frameWrap');
     const container = document.getElementById('proxyFrameContainer');
@@ -1657,7 +1800,9 @@ async function navigate() {
     sjFrame.frame.style.cssText = 'width:100%;height:100%;border:none;cursor:auto;';
     container.appendChild(sjFrame.frame);
     sjFrame.go(val);
+    toast('navigating...', 'info', 1500);
   } catch (err) {
+    toast('navigation failed', 'error', 3000);
     errMsg.textContent = "couldn't load that page — try a different url";
     errMsg.style.display = 'block';
   }
@@ -1781,7 +1926,7 @@ window.addEventListener('keydown', e => {
 let currentSource = 'gnmath';
 
 const SERAPH_BASE = 'https://joemama980.github.io/games';
-const SERAPH_IMG = 'https://joemama980.github.io/images/thumbnails';
+const SERAPH_IMG = 'https://raw.githubusercontent.com/a456pur/seraph/main/images/thumbnails';
 
 const seraphZones = [
   'slope','subwaysurfers','flappy','papaspizzaria','papasburgeria','sm64','run3','bitlife','crossy','mc','cookieclicker','templerun2','ducklife4','dinogame','jetpackjoyride','retrobowl','fruitninja','doodlejump','2048','tetris','fancypantsadventure','happywheels','papashotdoggeria','paperio2','superhot','thebindingofisaac','townscaper','tunnelrush','themehotel','escapingtheprison','stealingthediamond','infiltratingtheairship','fleeingthecomplex','theimpossiblequiz','solitaire','drifthunters','vex6','amongus','surf','motox3m','fnaf','fnaf-2','fnaf-3','fnaf-4','driftboss','fnf','pacman','papaspancakeria','rooftop','baldisbasics','bobtherobber2','minesweeper','pokemonemerald','pokemonfirered','supermariobros','supermariokart','supermarioworld','thereisnogame','worldshardestgame','castlevania','donkeykong','drmario','metroid','supermariobros2','supermariobros3','thelegendofzelda','warioware','yoshisisland','donkeykongland','kirbysdreamland','supermarioland','dogeminer','tanukisunset','aquaparkslides','colorswitch','papasfreezeria','bomberman','fireemblem','iceclimber','mariokartsupercircuit','pokemonleafgreen','pokemonruby','pokemonsapphire','superstarsaga','adofai','supersmashflash','supermeatboy','stickmanhook','defendthetank','sortthecourt','thisistheonlylevel','run','run2','battleships','breakingthebank','ducklife','ducklife2','ducklife3','linerider','mariocombat','raftwars2','spaceinvaders','animalcrossingwildworld','mariokartds','newsupermariobros','nintendogs','sm64ds','gunmayhem','learntofly','rooftop2','fireboywatergirl','chibiknight','clusterrush','doodledefender','learntofly2','papasscooperia','papassushiria','papaswingeria','raftwars','unfairmario','boxingphysics2','aceattorney','metalgearsolid','mother3','pokemondiamond','pokemonplatinum','pokemonsoulsilver','advancewars','banjopilot','supermonkeyballjr','theimpossiblequiz2','papasdonuteria','fancypantsadventure2','tinyfishing','bigredbutton','achievementunlocked','kirbymassattack','sonicadvance','wormsworldparty','badicecream','badicecream2','badicecream3','adventurecapitalist','monkeymart','doom64','banjokazooie','donkeykong64','fzerox','kirby64','mariokart64','marioparty','marioparty2','ocarinaoftime','starfox64','supersmashbros','streetfighter2','getawayshootout','rabbitsamurai','mariopartyds','professorlayton','scribblenauts','advancewars2','harvestmoon','mariotennis','megamanzero','pokemonmysterydungeon','pokemonunbound','papascheeseria','papascupcakeria','papasbakeria','papaspastaria','gunmayhem2','gunmayhemredux','achievementunlocked2','achievementunlocked3','factoryballs','skywire','supermarioflash','goldensun','metroidfusion','dbzsupersonicwarriors','warioland4','ducklife5','learntofly3','bloxors','electricman2','portal','portal2','skywire2','ducklife6','boxingrandom','cellmachine','stickmanboost','vex3','vex4','skibidi1v100','goldeneye007','majorasmask','papermario','mariogolf','pokemonstadium','excitebike64','pokemonsnap','marioparty3','sonicadvance2','bowsersinsidestory','spirittracks','thesims2','tetrisds','sonicrush','thesims3','superprincesspeach','legobatman','doom2','dukenukemadvance','mariopartyadvance','mariopinballland','pacmanworld','rayman3','shrek2','simcity','simpsonsroadrage','diddykongracing','waverace64','quest64','gex64','dukenukem64','mortalkombat4','badpiggies','supermarioflash2','swordsandsandals','swordsandsandals2','wordle','vex',
@@ -1868,12 +2013,18 @@ function makeSpecialCard(card) {
 
 function makeGameCard(zone) {
   const card = document.createElement('div');
-  card.className = 'game-card';
+  const isSeraph = zone.source === 'seraph';
+  card.className = isSeraph ? 'game-card seraph-card' : 'game-card';
   card.addEventListener('click', () => openGame(zone));
   const img = document.createElement('img');
   img.loading = 'lazy';
   img.alt = zone.name;
-  img.src = zone.cover.replace('{COVER_URL}', COVER_URL).replace('{HTML_URL}', HTML_URL);
+  if (isSeraph) {
+    img.src = zone.cover;
+    img.onerror = () => { img.style.display = 'none'; };
+  } else {
+    img.src = zone.cover.replace('{COVER_URL}', COVER_URL).replace('{HTML_URL}', HTML_URL);
+  }
   const name = document.createElement('div');
   name.className = 'game-card-name';
   name.textContent = zone.name;
@@ -1966,7 +2117,11 @@ document.querySelectorAll('.source-btn').forEach(btn => {
     currentSource = btn.dataset.source;
     document.getElementById('gamesSearch').value = '';
     const sortEl = document.getElementById('gamesSort');
-    sortEl.style.display = currentSource === 'seraph' ? 'none' : '';
+    if (currentSource === 'seraph') {
+      sortEl.classList.add('hidden');
+    } else {
+      sortEl.classList.remove('hidden');
+    }
     renderGames(currentSource === 'gnmath' ? allZones : seraphZones);
   });
 });
