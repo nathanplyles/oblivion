@@ -81,24 +81,32 @@
     bottom: 24px;
     right: 24px;
     z-index: 100;
-    width: 38px;
-    height: 38px;
-    background: rgba(13,13,15,0.85);
-    border: 1px solid var(--border);
-    border-top-color: var(--border-hi);
-    border-radius: 10px;
-    color: var(--muted);
+    width: 40px;
+    height: 40px;
+    background: rgba(9,9,11,0.92);
+    border: 1px solid rgba(200,240,160,0.18);
+    border-radius: 11px;
+    color: rgba(200,240,160,0.55);
     font-size: 16px;
     cursor: none;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(20px);
     opacity: 0;
-    animation: fadeUp 0.7s ease forwards 0.9s;
+    animation: fadeUp 0.7s ease forwards 0.9s, gearPulse 3s ease infinite 1.5s;
+    box-shadow: 0 0 12px rgba(200,240,160,0.06), inset 0 1px 0 rgba(200,240,160,0.06);
   }
-  .gear-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.12); }
+  .gear-btn:hover {
+    color: var(--accent);
+    border-color: rgba(200,240,160,0.35);
+    box-shadow: 0 0 20px rgba(200,240,160,0.12), inset 0 1px 0 rgba(200,240,160,0.1);
+  }
+  @keyframes gearPulse {
+    0%, 100% { box-shadow: 0 0 12px rgba(200,240,160,0.06), inset 0 1px 0 rgba(200,240,160,0.06); }
+    50% { box-shadow: 0 0 22px rgba(200,240,160,0.14), inset 0 1px 0 rgba(200,240,160,0.08); }
+  }
 
   /* SETTINGS MODAL */
   .settings-overlay {
@@ -192,7 +200,7 @@
   /* BACKGROUND PICKER */
   .bg-options {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 8px;
   }
 
@@ -826,6 +834,10 @@
           <canvas id="prev-canvas-starfield"></canvas>
           <div class="bg-option-label">starfield</div>
         </div>
+        <div class="bg-option" data-bg="dots" id="prev-dots">
+          <canvas id="prev-canvas-dots"></canvas>
+          <div class="bg-option-label">dots</div>
+        </div>
       </div>
     </div>
 
@@ -1018,8 +1030,7 @@ const trail = Array.from({ length: TRAIL_LENGTH }, () => ({ x: -9999, y: -9999 }
 let trailIndex = 0;
 
 function initParticles() {
-  tick = 0;
-  trailIndex = 0;
+  tick = 0; trailIndex = 0;
   trail.forEach(t => { t.x = -9999; t.y = -9999; });
   const count = Math.floor((W * H) / 7000);
   particles = Array.from({ length: count }, () => ({
@@ -1081,162 +1092,339 @@ function drawParticles() {
       const dx = a.x - b.x, dy = a.y - b.y;
       const d = Math.sqrt(dx * dx + dy * dy);
       if (d < maxDist) {
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
         ctx.strokeStyle = `rgba(200,240,160,${(1 - d / maxDist) * 0.09})`;
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
+        ctx.lineWidth = 0.5; ctx.stroke();
       }
     }
   }
   bgAnimId = requestAnimationFrame(drawParticles);
 }
 
-// ── RAIN ──
-let rainDrops = [];
+// ── RAIN ── (click to burst)
+let rainDrops = [], splashes = [];
 function initRain() {
-  const cols = Math.floor(W / 18);
+  splashes = [];
+  const cols = Math.floor(W / 16);
   rainDrops = Array.from({ length: cols }, (_, i) => ({
-    x: i * 18 + 9,
+    x: i * 16 + Math.random() * 8,
     y: Math.random() * -H,
-    speed: Math.random() * 2 + 1,
-    length: Math.floor(Math.random() * 18 + 8),
-    opacity: Math.random() * 0.4 + 0.1,
-    width: Math.random() * 1 + 0.5,
+    speed: Math.random() * 3 + 2,
+    length: Math.floor(Math.random() * 14 + 6),
+    opacity: Math.random() * 0.35 + 0.08,
+    width: Math.random() * 0.8 + 0.3,
+    wind: (Math.random() - 0.5) * 0.3,
   }));
 }
+
+function addSplash(x, y, count = 8) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i / count) - Math.PI / 2;
+    const speed = Math.random() * 3 + 1;
+    splashes.push({
+      x, y, vx: Math.cos(angle) * speed * (0.5 + Math.random()),
+      vy: Math.sin(angle) * speed - 2,
+      life: 1, decay: Math.random() * 0.04 + 0.03,
+      r: Math.random() * 1.5 + 0.5,
+    });
+  }
+}
+
 function drawRain() {
   ctx.clearRect(0, 0, W, H);
   for (let d of rainDrops) {
-    const grad = ctx.createLinearGradient(d.x, d.y - d.length * 12, d.x, d.y);
-    grad.addColorStop(0, `rgba(180,200,255,0)`);
-    grad.addColorStop(0.6, `rgba(180,200,255,${d.opacity * 0.5})`);
-    grad.addColorStop(1, `rgba(220,230,255,${d.opacity})`);
+    const grad = ctx.createLinearGradient(d.x, d.y - d.length * 10, d.x, d.y);
+    grad.addColorStop(0, 'rgba(160,185,240,0)');
+    grad.addColorStop(0.5, `rgba(170,195,245,${d.opacity * 0.4})`);
+    grad.addColorStop(1, `rgba(200,215,255,${d.opacity})`);
     ctx.beginPath();
-    ctx.moveTo(d.x, d.y - d.length * 12);
-    ctx.lineTo(d.x, d.y);
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = d.width;
-    ctx.stroke();
-    // splash at bottom
-    if (d.y > H - 20) {
-      ctx.beginPath();
-      ctx.arc(d.x, H - 2, 2, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(180,200,255,${d.opacity * 0.3})`;
-      ctx.fill();
-    }
-    d.y += d.speed * 6;
-    if (d.y > H + d.length * 12) {
+    ctx.moveTo(d.x, d.y - d.length * 10);
+    ctx.lineTo(d.x + d.wind * d.length * 2, d.y);
+    ctx.strokeStyle = grad; ctx.lineWidth = d.width; ctx.stroke();
+    d.x += d.wind; d.y += d.speed * 5;
+    if (d.y > H) {
+      if (Math.random() < 0.3) addSplash(d.x, H - 2, 5);
       d.y = Math.random() * -200;
-      d.speed = Math.random() * 2 + 1;
-      d.opacity = Math.random() * 0.4 + 0.1;
+      d.speed = Math.random() * 3 + 2;
+      d.opacity = Math.random() * 0.35 + 0.08;
+      d.x = Math.random() * W;
     }
+  }
+  // draw splashes
+  for (let i = splashes.length - 1; i >= 0; i--) {
+    const s = splashes[i];
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r * s.life, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(180,205,255,${s.life * 0.5})`;
+    ctx.fill();
+    s.x += s.vx; s.y += s.vy; s.vy += 0.15; s.life -= s.decay;
+    if (s.life <= 0) splashes.splice(i, 1);
   }
   bgAnimId = requestAnimationFrame(drawRain);
 }
 
-// ── MATRIX ──
+// ── MATRIX ── (mouse proximity highlights nearby columns)
 let matrixCols = [], matrixTick = 0;
-const MATRIX_CHARS = 'ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ01';
+const MATRIX_CHARS = 'ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789';
+const MATRIX_FS = 13;
+
 function initMatrix() {
-  const fontSize = 14;
-  const cols = Math.floor(W / fontSize);
-  matrixCols = Array.from({ length: cols }, () => ({
-    y: Math.random() * -50,
-    speed: Math.random() * 0.5 + 0.2,
-    chars: Array.from({ length: Math.floor(Math.random() * 20 + 8) }, () =>
-      MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]
-    ),
-    opacity: Math.random() * 0.3 + 0.05,
-    updateTimer: 0,
-    updateInterval: Math.floor(Math.random() * 8 + 4),
-  }));
+  matrixTick = 0;
+  const cols = Math.floor(W / MATRIX_FS);
+  matrixCols = Array.from({ length: cols }, () => {
+    const len = Math.floor(Math.random() * 28 + 10);
+    return {
+      x: 0, // set below
+      y: Math.random() * -80,
+      speed: Math.random() * 0.6 + 0.15,
+      chars: Array.from({ length: len }, () => MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]),
+      baseOpacity: Math.random() * 0.22 + 0.04,
+      updateTimer: 0,
+      updateInterval: Math.floor(Math.random() * 6 + 3),
+      glowIntensity: 0,
+    };
+  });
+  // distribute with slight randomness in x
+  matrixCols.forEach((col, i) => { col.x = i * MATRIX_FS + Math.random() * 3; });
 }
+
 function drawMatrix() {
   matrixTick++;
-  ctx.fillStyle = 'rgba(9,9,11,0.08)';
+  ctx.fillStyle = 'rgba(9,9,11,0.1)';
   ctx.fillRect(0, 0, W, H);
-  const fontSize = 14;
-  ctx.font = `${fontSize}px 'DM Mono', monospace`;
-  for (let i = 0; i < matrixCols.length; i++) {
-    const col = matrixCols[i];
+
+  for (let col of matrixCols) {
+    // mouse proximity boost
+    const mdx = col.x - mouse.x;
+    const proximity = Math.max(0, 1 - Math.abs(mdx) / 160);
+    col.glowIntensity += (proximity * 1.2 - col.glowIntensity) * 0.08;
+
     col.updateTimer++;
     if (col.updateTimer >= col.updateInterval) {
       col.updateTimer = 0;
       const idx = Math.floor(Math.random() * col.chars.length);
       col.chars[idx] = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
     }
-    const x = i * fontSize;
+
+    const effectiveOpacity = col.baseOpacity + col.glowIntensity * 0.25;
+    const effectiveSpeed = col.speed + col.glowIntensity * 0.8;
+
+    ctx.font = `${MATRIX_FS}px 'DM Mono', monospace`;
     for (let j = 0; j < col.chars.length; j++) {
-      const y = (col.y - j) * fontSize;
-      if (y < 0 || y > H) continue;
-      const fade = 1 - j / col.chars.length;
+      const y = (col.y - j) * MATRIX_FS;
+      if (y < -MATRIX_FS || y > H + MATRIX_FS) continue;
+      const fade = Math.pow(1 - j / col.chars.length, 1.4);
       if (j === 0) {
-        ctx.fillStyle = `rgba(220,255,200,${col.opacity * 2.5})`;
+        // bright head
+        ctx.shadowBlur = col.glowIntensity > 0.3 ? 8 : 3;
+        ctx.shadowColor = `rgba(200,255,160,0.8)`;
+        ctx.fillStyle = `rgba(230,255,210,${Math.min(1, effectiveOpacity * 4)})`;
+      } else if (j < 3) {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = `rgba(180,240,140,${effectiveOpacity * fade * 1.8})`;
       } else {
-        ctx.fillStyle = `rgba(150,220,120,${col.opacity * fade * 0.8})`;
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = `rgba(120,200,100,${effectiveOpacity * fade * 0.9})`;
       }
-      ctx.fillText(col.chars[j], x, y);
+      ctx.fillText(col.chars[j], col.x, y);
     }
-    col.y += col.speed;
-    if ((col.y - col.chars.length) * fontSize > H) {
-      col.y = Math.random() * -20;
-      col.speed = Math.random() * 0.5 + 0.2;
-      col.opacity = Math.random() * 0.3 + 0.05;
+    ctx.shadowBlur = 0;
+
+    col.y += effectiveSpeed;
+    if ((col.y - col.chars.length) * MATRIX_FS > H) {
+      col.y = -Math.random() * 40;
+      col.speed = Math.random() * 0.6 + 0.15;
+      col.baseOpacity = Math.random() * 0.22 + 0.04;
     }
   }
   bgAnimId = requestAnimationFrame(drawMatrix);
 }
 
-// ── STARFIELD ──
-let stars = [], starMouse = { x: W / 2, y: H / 2 };
+// ── STARFIELD ── (click to warp, mouse parallax)
+let stars = [], shootingStars = [], warpParticles = [], starTick = 0;
 function initStarfield() {
-  stars = Array.from({ length: 220 }, () => ({
+  starTick = 0; shootingStars = []; warpParticles = [];
+  stars = Array.from({ length: 320 }, () => ({
     x: Math.random() * W, y: Math.random() * H,
-    z: Math.random() * W,
-    pz: 0,
-    size: Math.random() * 1.5 + 0.3,
+    z: Math.random(),
+    size: Math.random() * 1.6 + 0.2,
     bright: Math.random(),
     twinkle: Math.random() * Math.PI * 2,
-    twinkleSpeed: Math.random() * 0.03 + 0.01,
+    twinkleSpeed: Math.random() * 0.025 + 0.005,
+    color: Math.random() > 0.85 ? [255, 220, 180] : Math.random() > 0.7 ? [180, 200, 255] : [215, 215, 235],
   }));
 }
+
+function spawnShootingStar() {
+  shootingStars.push({
+    x: Math.random() * W * 0.7,
+    y: Math.random() * H * 0.4,
+    vx: Math.random() * 6 + 4,
+    vy: Math.random() * 3 + 1.5,
+    life: 1,
+    decay: 0.018,
+    len: Math.floor(Math.random() * 60 + 30),
+  });
+}
+
+function triggerWarp(cx, cy) {
+  for (let i = 0; i < 60; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 5 + 1;
+    warpParticles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1, decay: Math.random() * 0.025 + 0.01,
+      r: Math.random() * 1.5 + 0.3,
+      color: Math.random() > 0.5 ? [200, 210, 255] : [255, 240, 200],
+    });
+  }
+}
+
 function drawStarfield() {
+  starTick++;
   ctx.clearRect(0, 0, W, H);
-  // subtle nebula
-  const cx = W / 2 + (mouse.x - W / 2) * 0.02;
-  const cy = H / 2 + (mouse.y - H / 2) * 0.02;
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, W * 0.5);
-  grad.addColorStop(0, 'rgba(30,20,50,0.15)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
 
-  const offsetX = (mouse.x - W / 2) * 0.015;
-  const offsetY = (mouse.y - H / 2) * 0.015;
+  // faint nebula follows mouse
+  if (mouse.x !== -9999) {
+    const grad = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, W * 0.35);
+    grad.addColorStop(0, 'rgba(20,15,40,0.12)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  }
 
+  // parallax offset
+  const ox = mouse.x === -9999 ? 0 : (mouse.x - W/2) * 0.018;
+  const oy = mouse.y === -9999 ? 0 : (mouse.y - H/2) * 0.018;
+
+  // spawn shooting stars
+  if (starTick % 280 === 0 && Math.random() < 0.6) spawnShootingStar();
+
+  // draw stars
   for (let s of stars) {
     s.twinkle += s.twinkleSpeed;
-    const twinkleAlpha = 0.5 + Math.sin(s.twinkle) * 0.5;
-    const px = s.x + offsetX * (s.z / W);
-    const py = s.y + offsetY * (s.z / W);
-    const alpha = (0.3 + s.bright * 0.5) * twinkleAlpha;
-    const r = s.size * (0.5 + s.bright * 0.8);
-    // glow for brighter stars
-    if (s.bright > 0.7) {
-      ctx.shadowBlur = 6;
-      ctx.shadowColor = `rgba(200,210,255,${alpha * 0.5})`;
+    const tw = 0.55 + Math.sin(s.twinkle) * 0.45;
+    const px = s.x + ox * s.z;
+    const py = s.y + oy * s.z;
+    const alpha = (0.25 + s.bright * 0.55) * tw;
+    const r = s.size * (0.4 + s.bright * 0.7);
+    if (s.bright > 0.75) {
+      ctx.shadowBlur = 4 + s.bright * 6;
+      ctx.shadowColor = `rgba(${s.color[0]},${s.color[1]},${s.color[2]},${alpha * 0.6})`;
     }
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(${200 + s.bright * 55},${200 + s.bright * 30},${220 + s.bright * 35},${alpha})`;
+    ctx.fillStyle = `rgba(${s.color[0]},${s.color[1]},${s.color[2]},${alpha})`;
     ctx.fill();
     ctx.shadowBlur = 0;
   }
-  // shooting star occasionally
+
+  // shooting stars
+  for (let i = shootingStars.length - 1; i >= 0; i--) {
+    const ss = shootingStars[i];
+    const grad = ctx.createLinearGradient(ss.x - ss.vx * ss.len / 6, ss.y - ss.vy * ss.len / 6, ss.x, ss.y);
+    grad.addColorStop(0, 'rgba(210,220,255,0)');
+    grad.addColorStop(1, `rgba(230,235,255,${ss.life * 0.8})`);
+    ctx.beginPath();
+    ctx.moveTo(ss.x - ss.vx * ss.len / 6, ss.y - ss.vy * ss.len / 6);
+    ctx.lineTo(ss.x, ss.y);
+    ctx.strokeStyle = grad; ctx.lineWidth = ss.life * 1.5; ctx.stroke();
+    ss.x += ss.vx; ss.y += ss.vy; ss.life -= ss.decay;
+    if (ss.life <= 0) shootingStars.splice(i, 1);
+  }
+
+  // warp burst particles
+  for (let i = warpParticles.length - 1; i >= 0; i--) {
+    const p = warpParticles[i];
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${p.color[0]},${p.color[1]},${p.color[2]},${p.life * 0.7})`;
+    ctx.fill();
+    p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+    if (p.life <= 0) warpParticles.splice(i, 1);
+  }
+
   bgAnimId = requestAnimationFrame(drawStarfield);
 }
+
+// ── DOT GRID ── (mouse bulge)
+let dotGrid = [], dotTick = 0;
+const DOT_SPACING = 28;
+
+function initDotGrid() {
+  dotTick = 0; dotGrid = [];
+  const cols = Math.ceil(W / DOT_SPACING) + 1;
+  const rows = Math.ceil(H / DOT_SPACING) + 1;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      dotGrid.push({
+        bx: c * DOT_SPACING, by: r * DOT_SPACING,
+        x: c * DOT_SPACING, y: r * DOT_SPACING,
+        baseR: Math.random() * 0.8 + 0.6,
+        phase: Math.random() * Math.PI * 2,
+        phaseSpeed: Math.random() * 0.004 + 0.001,
+        baseAlpha: Math.random() * 0.12 + 0.06,
+      });
+    }
+  }
+}
+
+function drawDotGrid() {
+  dotTick++;
+  ctx.clearRect(0, 0, W, H);
+  const bulgeRadius = 140;
+  const maxShift = 18;
+
+  for (let d of dotGrid) {
+    d.phase += d.phaseSpeed;
+    const breathe = Math.sin(d.phase) * 0.3;
+
+    let tx = d.bx, ty = d.by;
+    let extraR = 0, extraAlpha = 0, greenTint = 0;
+
+    if (mouse.x !== -9999) {
+      const dx = d.bx - mouse.x, dy = d.by - mouse.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < bulgeRadius && dist > 0) {
+        const force = Math.pow(1 - dist / bulgeRadius, 2);
+        tx = d.bx + (dx / dist) * force * maxShift;
+        ty = d.by + (dy / dist) * force * maxShift;
+        extraR = force * 2.8;
+        extraAlpha = force * 0.5;
+        greenTint = force;
+      }
+    }
+
+    // smooth toward target
+    d.x += (tx - d.x) * 0.12;
+    d.y += (ty - d.y) * 0.12;
+
+    const r = d.baseR + extraR + breathe;
+    const alpha = d.baseAlpha + extraAlpha;
+
+    if (greenTint > 0.1) {
+      const g = Math.floor(170 + greenTint * 70);
+      const gb = Math.floor(80 + greenTint * 80);
+      ctx.fillStyle = `rgba(${Math.floor(180+greenTint*40)},${g},${gb},${alpha})`;
+    } else {
+      ctx.fillStyle = `rgba(180,185,195,${alpha})`;
+    }
+
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, Math.max(0.1, r), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  bgAnimId = requestAnimationFrame(drawDotGrid);
+}
+
+// ── CLICK INTERACTIONS ──
+canvas.style.pointerEvents = 'none'; // canvas doesn't need clicks — we listen on window
+window.addEventListener('click', e => {
+  if (document.getElementById('settingsModal').classList.contains('open')) return;
+  if (currentBg === 'rain') addSplash(e.clientX, e.clientY, 14);
+  else if (currentBg === 'starfield') triggerWarp(e.clientX, e.clientY);
+});
 
 function startBg(name) {
   if (bgAnimId) cancelAnimationFrame(bgAnimId);
@@ -1244,12 +1432,12 @@ function startBg(name) {
   bgAnimId = null;
   currentBg = name;
   localStorage.setItem('voidBg', name);
-  // update picker active state
   document.querySelectorAll('.bg-option').forEach(o => o.classList.toggle('active', o.dataset.bg === name));
   if (name === 'particles') { initParticles(); drawParticles(); }
   else if (name === 'rain') { initRain(); drawRain(); }
   else if (name === 'matrix') { initMatrix(); drawMatrix(); }
   else if (name === 'starfield') { initStarfield(); drawStarfield(); }
+  else if (name === 'dots') { initDotGrid(); drawDotGrid(); }
 }
 
 // start saved bg
@@ -1294,12 +1482,20 @@ function drawPreview(canvasEl, type) {
       c.beginPath(); c.arc(Math.random()*w, Math.random()*h, Math.random()*1.2+0.2, 0, Math.PI*2);
       c.fillStyle = `rgba(210,210,240,${Math.random()*0.6+0.2})`; c.fill();
     }
+  } else if (type === 'dots') {
+    const sp = 9;
+    for (let r = sp/2; r < h; r += sp) {
+      for (let col = sp/2; col < w; col += sp) {
+        c.beginPath(); c.arc(col, r, 0.7, 0, Math.PI*2);
+        c.fillStyle = `rgba(175,180,195,${Math.random()*0.1+0.07})`; c.fill();
+      }
+    }
   }
 }
 
 // draw previews after a tick so layout is done
 setTimeout(() => {
-  ['particles','rain','matrix','starfield'].forEach(type => {
+  ['particles','rain','matrix','starfield','dots'].forEach(type => {
     const c = document.getElementById('prev-canvas-' + type);
     if (c) drawPreview(c, type);
   });
