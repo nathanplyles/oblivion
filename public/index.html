@@ -660,7 +660,6 @@
     </div>
   </div>
 
-
   <div class="panel cloak-panel" id="tab-cloak">
     <div class="cloak-label">tab name</div>
     <div class="proxy-bar" style="margin-bottom:10px;">
@@ -678,29 +677,29 @@
       <button class="cloak-preset" data-title="Google Drive" data-icon="https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png">
         <img src="https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png" alt=""> drive
       </button>
-      <button class="cloak-preset" data-title="Khan Academy" data-icon="https://www.khanacademy.org/favicon.ico">
-        <img src="https://www.khanacademy.org/favicon.ico" alt=""> khan academy
+      <button class="cloak-preset" data-title="Khan Academy" data-icon="https://www.google.com/s2/favicons?domain=khanacademy.org&sz=32">
+        <img src="https://www.google.com/s2/favicons?domain=khanacademy.org&sz=32" alt=""> khan academy
       </button>
-      <button class="cloak-preset" data-title="Quizlet" data-icon="https://quizlet.com/favicon.ico">
-        <img src="https://quizlet.com/favicon.ico" alt=""> quizlet
+      <button class="cloak-preset" data-title="Quizlet" data-icon="https://www.google.com/s2/favicons?domain=quizlet.com&sz=32">
+        <img src="https://www.google.com/s2/favicons?domain=quizlet.com&sz=32" alt=""> quizlet
       </button>
-      <button class="cloak-preset" data-title="Duolingo" data-icon="https://www.duolingo.com/favicon.ico">
-        <img src="https://www.duolingo.com/favicon.ico" alt=""> duolingo
+      <button class="cloak-preset" data-title="Duolingo" data-icon="https://www.google.com/s2/favicons?domain=duolingo.com&sz=32">
+        <img src="https://www.google.com/s2/favicons?domain=duolingo.com&sz=32" alt=""> duolingo
       </button>
-      <button class="cloak-preset" data-title="Desmos" data-icon="https://www.desmos.com/favicon.ico">
-        <img src="https://www.desmos.com/favicon.ico" alt=""> desmos
+      <button class="cloak-preset" data-title="Desmos" data-icon="https://www.google.com/s2/favicons?domain=desmos.com&sz=32">
+        <img src="https://www.google.com/s2/favicons?domain=desmos.com&sz=32" alt=""> desmos
       </button>
-      <button class="cloak-preset" data-title="Clever | Portal" data-icon="https://clever.com/favicon.ico">
-        <img src="https://clever.com/favicon.ico" alt=""> clever
+      <button class="cloak-preset" data-title="Clever | Portal" data-icon="https://www.google.com/s2/favicons?domain=clever.com&sz=32">
+        <img src="https://www.google.com/s2/favicons?domain=clever.com&sz=32" alt=""> clever
       </button>
-      <button class="cloak-preset" data-title="Choose a subject, i-Ready" data-icon="https://login.i-ready.com/favicon.ico">
-        <img src="https://login.i-ready.com/favicon.ico" alt=""> i-ready
+      <button class="cloak-preset" data-title="Choose a subject, i-Ready" data-icon="https://www.google.com/s2/favicons?domain=i-ready.com&sz=32">
+        <img src="https://www.google.com/s2/favicons?domain=i-ready.com&sz=32" alt=""> i-ready
       </button>
-      <button class="cloak-preset" data-title="NoodleTools - Projects" data-icon="https://my.noodletools.com/favicon.ico">
-        <img src="https://my.noodletools.com/favicon.ico" alt=""> noodletools
+      <button class="cloak-preset" data-title="NoodleTools - Projects" data-icon="https://www.google.com/s2/favicons?domain=noodletools.com&sz=32">
+        <img src="https://www.google.com/s2/favicons?domain=noodletools.com&sz=32" alt=""> noodletools
       </button>
-      <button class="cloak-preset" data-title="Schoology" data-icon="https://www.schoology.com/favicon.ico">
-        <img src="https://www.schoology.com/favicon.ico" alt=""> schoology
+      <button class="cloak-preset" data-title="Schoology" data-icon="https://www.google.com/s2/favicons?domain=schoology.com&sz=32">
+        <img src="https://www.google.com/s2/favicons?domain=schoology.com&sz=32" alt=""> schoology
       </button>
       <button class="cloak-preset active" data-title="void" data-icon="/void-icon.svg">
         <img src="/void-icon.svg" alt=""> void
@@ -737,7 +736,6 @@ scramjet.init('/sw.js');
 
 const connection = new BareMuxConnection('/baremux/worker.js');
 
-// --- Canvas / cursor ---
 const canvas = document.getElementById('bg');
 const ctx = canvas.getContext('2d');
 const glowEl = document.getElementById('cursorGlow');
@@ -869,7 +867,6 @@ window.addEventListener('mouseleave', () => {
 
 resize(); initParticles(); draw();
 
-// --- Tabs ---
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const current = document.querySelector('.panel.active');
@@ -896,7 +893,6 @@ document.querySelectorAll('.engine-btn').forEach(btn => {
   });
 });
 
-// --- Proxy ---
 let sjFrame = null;
 
 async function navigate() {
@@ -967,8 +963,6 @@ document.getElementById('frameNewTab').addEventListener('click', () => {
   if (sjFrame && sjFrame.frame.src) window.open(sjFrame.frame.src, '_blank');
 });
 
-
-// --- Cloaking ---
 let currentCloakIcon = '/void-icon.svg';
 
 function setFavicon(url) {
@@ -981,7 +975,6 @@ function setFavicon(url) {
   link.href = url;
 }
 
-// Load saved cloak on start
 const savedTitle = localStorage.getItem('voidCloakTitle');
 const savedIcon = localStorage.getItem('voidCloakIcon');
 if (savedTitle) document.title = savedTitle;
@@ -1035,7 +1028,6 @@ document.getElementById('resetCloak').addEventListener('click', () => {
   currentCloakIcon = '/void-icon.svg';
 });
 
-// --- Games ---
 const COVER_URL = 'https://cdn.jsdelivr.net/gh/gn-math/covers@main';
 const HTML_URL = 'https://cdn.jsdelivr.net/gh/gn-math/html@main';
 const DISCORD_URL = 'https://discord.gg/gmb2RegMTd';
