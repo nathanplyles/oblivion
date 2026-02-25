@@ -1778,69 +1778,6 @@ window.addEventListener('keydown', e => {
   }
 });
 
-// ─── GAMES ───────────────────────────────────────────────────────────
-const SERAPH_BASE = 'https://joemama980.github.io/games/';
-const SERAPH_GAMES = [
-  'slope','subwaysurfers','flappy','papaspizzaria','papasburgeria','sm64','run3','bitlife',
-  'crossy','mc','cookieclicker','templerun2','ducklife4','dinogame','jetpackjoyride',
-  'retrobowl','fruitninja','doodlejump','2048','tetris','fancypantsadventure','happywheels',
-  'papashotdoggeria','paperio2','superhot','thebindingofisaac','townscaper','tunnelrush',
-  'themehotel','escapingtheprison','stealingthediamond','infiltratingtheairship',
-  'fleeingthecomplex','theimpossiblequiz','solitaire','drifthunters','vex6','amongus',
-  'surf','motox3m','fnaf','fnaf-2','fnaf-3','fnaf-4',
-  'riddleschool/riddleschool1','riddleschool/riddleschool2','riddleschool/riddleschool3',
-  'riddleschool/riddleschool4','riddleschool/riddleschool5','riddleschool/riddletransfer',
-  'riddleschool/riddletransfer2','driftboss','fnf','pacman','papaspancakeria','rooftop',
-  'baldisbasics','bobtherobber2','minesweeper','pokemonemerald','pokemonfirered',
-  'supermariobros','supermariokart','supermarioworld','thereisnogame','worldshardestgame',
-  'castlevania','donkeykong','drmario','metroid','supermariobros2','supermariobros3',
-  'thelegendofzelda','warioware','yoshisisland','donkeykongland','kirbysdreamland',
-  'supermarioland','dogeminer','tanukisunset','aquaparkslides','colorswitch','papasfreezeria',
-  'btd/btd','btd/btd2','btd/btd3','btd/btd4','bomberman','fireemblem','iceclimber',
-  'mariokartsupercircuit','pokemonleafgreen','pokemonruby','pokemonsapphire','superstarsaga',
-  'adofai','supersmashflash','supermeatboy','stickmanhook','defendthetank','sortthecourt',
-  'thisistheonlylevel','run','run2','battleships','breakingthebank','ducklife','ducklife2',
-  'ducklife3','linerider','mariocombat','raftwars2','spaceinvaders','animalcrossingwildworld',
-  'mariokartds','newsupermariobros','nintendogs','sm64ds','gunmayhem','learntofly',
-  'rooftop2','fireboywatergirl','chibiknight','clusterrush','doodledefender','learntofly2',
-  'papasscooperia','papassushiria','papaswingeria','raftwars','unfairmario','boxingphysics2',
-  'aceattorney','metalgearsolid','mother3','pokemondiamond','pokemonplatinum','pokemonsoulsilver',
-  'advancewars','banjopilot','supermonkeyballjr','theimpossiblequiz2','papasdonuteria',
-  'fancypantsadventure2','tinyfishing','bigredbutton','achievementunlocked','kirbymassattack',
-  'sonicadvance','wormsworldparty','badicecream','badicecream2','badicecream3',
-  'adventurecapitalist','monkeymart','doom64','banjokazooie','donkeykong64','fzerox',
-  'kirby64','mariokart64','marioparty','marioparty2','ocarinaoftime','starfox64',
-  'supersmashbros','streetfighter2','getawayshootout','rabbitsamurai','mariopartyds',
-  'professorlayton','scribblenauts','advancewars2','harvestmoon','mariotennis','megamanzero',
-  'pokemonmysterydungeon','pokemonunbound','papascheeseria','papascupcakeria','papasbakeria',
-  'papaspastaria','gunmayhem2','gunmayhemredux','achievementunlocked2','achievementunlocked3',
-  'factoryballs','skywire','supermarioflash','goldensun','metroidfusion','dbzsupersonicwarriors',
-  'warioland4','ducklife5','learntofly3','bloxors','electricman2','portal','portal2',
-  'skywire2','ducklife6','boxingrandom','cellmachine','stickmanboost','vex3','vex4',
-  'skibidi1v100','goldeneye007','majorasmask','papermario','mariogolf','pokemonstadium',
-  'excitebike64','pokemonsnap','marioparty3','sonicadvance2','bowsersinsidestory',
-  'spirittracks','thesims2','tetrisds','sonicrush','thesims3','superprincesspeach',
-  'legobatman','doom2','dukenukemadvance','mariopartyadvance','mariopinballland','pacmanworld',
-  'rayman3','shrek2','simcity','simpsonsroadrage','diddykongracing','waverace64','quest64',
-  'gex64','dukenukem64','mortalkombat4','badpiggies','supermarioflash2','swordsandsandals',
-  'swordsandsandals2','wordle','vex',
-];
-
-function seraphSlugToName(slug) {
-  // get last segment for nested paths
-  const part = slug.includes('/') ? slug.split('/').pop() : slug;
-  return part.replace(/[-_]/g, ' ').replace(/\d+$/, m => ' ' + m).trim()
-    .replace(/\w/g, c => c.toUpperCase()).trim();
-}
-
-const seraphZones = SERAPH_GAMES.map(slug => ({
-  id: slug,
-  name: seraphSlugToName(slug),
-  url: SERAPH_BASE + slug + '/index.html',
-  cover: null,
-  source: 'seraph',
-}));
-
 let currentSource = 'gnmath';
 
 const SERAPH_BASE = 'https://joemama980.github.io/games';
