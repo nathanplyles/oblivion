@@ -11,8 +11,6 @@ import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
 
 const publicPath = fileURLToPath(new URL("../public/", import.meta.url));
 
-// Wisp Configuration: Refer to the documentation at https://www.npmjs.com/package/@mercuryworkshop/wisp-js
-
 logging.set_level(logging.NONE);
 Object.assign(wisp.options, {
 	allow_udp_streams: false,
@@ -58,15 +56,59 @@ fastify.register(fastifyStatic, {
 	decorateReply: false,
 });
 
+// ── Spotify token proxy ────────────────────────────────────────────────
+// Credentials live in Render env vars — never exposed to the client.
+// Token is cached server-side for its full lifetime (~1 hour).
+let cachedToken = null;
+let cachedTokenExp = 0;
+
+fastify.get("/api/spotify-token", async (request, reply) => {
+	const clientId = process.env.SPOTIFY_CLIENT_ID;
+	const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+	if (!clientId || !clientSecret) {
+		return reply.code(503).send({ error: "Spotify credentials not configured on server." });
+	}
+
+	if (cachedToken && Date.now() < cachedTokenExp) {
+		return reply.send({ access_token: cachedToken });
+	}
+
+	try {
+		const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+		const res = await fetch("https://accounts.spotify.com/api/token", {
+			method: "POST",
+			headers: {
+				Authorization: `Basic ${credentials}`,
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+			body: "grant_type=client_credentials",
+		});
+
+		if (!res.ok) {
+			const text = await res.text();
+			console.error("Spotify auth failed:", text);
+			return reply.code(502).send({ error: "Spotify authentication failed." });
+		}
+
+		const data = await res.json();
+		cachedToken = data.access_token;
+		cachedTokenExp = Date.now() + (data.expires_in - 60) * 1000;
+
+		return reply.send({ access_token: cachedToken });
+	} catch (err) {
+		console.error("Spotify token error:", err);
+		return reply.code(500).send({ error: "Internal server error." });
+	}
+});
+// ──────────────────────────────────────────────────────────────────────
+
 fastify.setNotFoundHandler((res, reply) => {
 	return reply.code(404).type("text/html").sendFile("404.html");
 });
 
 fastify.server.on("listening", () => {
 	const address = fastify.server.address();
-
-	// by default we are listening on 0.0.0.0 (every interface)
-	// we just need to list a few
 	console.log("Listening on:");
 	console.log(`\thttp://localhost:${address.port}`);
 	console.log(`\thttp://${hostname()}:${address.port}`);
@@ -87,7 +129,6 @@ function shutdown() {
 }
 
 let port = parseInt(process.env.PORT || "");
-
 if (isNaN(port)) port = 8080;
 
 fastify.listen({
