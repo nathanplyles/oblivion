@@ -92,8 +92,10 @@ fastify.get("/api/spotify/*", async (request, reply) => {
 	try {
 		const token = await getSpotifyToken();
 		const path = request.params["*"];
-		const qs = new URLSearchParams(request.query).toString();
-		const url = `https://api.spotify.com/v1/${path}${qs ? "?" + qs : ""}`;
+		// Rebuild full URL preserving the original query string exactly
+		const rawUrl = request.url; // e.g. /api/spotify/search?q=hello&type=track
+		const afterPrefix = rawUrl.slice("/api/spotify/".length); // search?q=hello&type=track
+		const url = "https://api.spotify.com/v1/" + afterPrefix;
 		const res = await fetch(url, {
 			headers: { Authorization: `Bearer ${token}` },
 		});

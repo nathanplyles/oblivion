@@ -1817,21 +1817,20 @@ async function musicInit() {
 }
 
 async function loadFeatured() {
+  // Load tracks from a few well-known public playlists as "featured"
+  const playlists = [
+    '37i9dQZF1DXcBWIGoYBM5M', // Today's Top Hits
+    '37i9dQZF1DX0XUsuxWHRQd', // RapCaviar
+    '37i9dQZF1DX4JAvHpjipBk', // New Music Friday
+  ];
+  const pid = playlists[Math.floor(Math.random() * playlists.length)];
   try {
-    const data = await spotifyFetch('/browse/featured-playlists?limit=1&country=US');
-    const pid = data.playlists.items[0]?.id;
-    if (!pid) return;
-    const tracks = await spotifyFetch('/playlists/' + pid + '/tracks?limit=24&fields=items(track(id,name,duration_ms,artists,album))');
-    const items = tracks.items.map(i => i.track).filter(Boolean);
-    document.getElementById('musicRightTitle').textContent = data.message || 'featured';
-    renderTrackList(document.getElementById('musicRightList'), items, false);
+    const data = await spotifyFetch('/playlists/' + pid + '?fields=name,tracks.items(track(id,name,duration_ms,artists,album))');
+    const items = data.tracks?.items?.map(i => i.track).filter(Boolean) || [];
+    document.getElementById('musicRightTitle').textContent = data.name || 'featured';
+    renderTrackList(document.getElementById('musicRightList'), items.slice(0, 24), false);
   } catch(e) {
-    try {
-      const rec = await spotifyFetch('/recommendations?seed_genres=pop%2Chip-hop%2Cindie&limit=24');
-      renderTrackList(document.getElementById('musicRightList'), rec.tracks, false);
-    } catch(e2) {
-      document.getElementById('musicRightList').innerHTML = '<div class="music-results-empty">connect spotify in settings</div>';
-    }
+    document.getElementById('musicRightList').innerHTML = '<div class="music-results-empty">search to get started</div>';
   }
 }
 
