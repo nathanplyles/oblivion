@@ -82,21 +82,42 @@ canvas#bg { position: fixed; inset: 0; z-index: 0; }
   justify-content: center;
   padding-bottom: 80px;
 }
+#screen-home::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -58%);
+  width: 500px; height: 500px;
+  background: radial-gradient(ellipse at center,
+    rgba(var(--accent-rgb), 0.04) 0%,
+    rgba(var(--accent-rgb), 0.015) 35%,
+    transparent 70%);
+  pointer-events: none;
+  animation: glowPulse 6s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.7; transform: translate(-50%, -58%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -58%) scale(1.08); }
+}
 
 .wordmark {
   font-family: var(--font-display);
   font-size: clamp(1.8rem, 4vw, 2.8rem);
   color: var(--text); letter-spacing: -0.02em;
-  text-shadow: 0 0 40px rgba(255,255,255,0.18), 0 0 120px rgba(255,255,255,0.08);
+  text-shadow:
+    0 0 20px rgba(255,255,255,0.35),
+    0 0 60px rgba(255,255,255,0.15),
+    0 0 140px rgba(200,240,160,0.08);
   margin-bottom: 6px;
   opacity: 0; transform: translateY(10px);
   animation: fadeUp 0.7s ease forwards 0.2s;
 }
 .tagline {
-  font-size: 10px; color: #555; letter-spacing: 0.18em;
+  font-size: 10px; color: #3a3a42; letter-spacing: 0.18em;
   text-transform: uppercase; margin-bottom: 52px;
   opacity: 0; transform: translateY(8px);
   animation: fadeUp 0.7s ease forwards 0.4s;
+  text-shadow: 0 0 20px rgba(200,240,160,0.12);
 }
 @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
 
@@ -116,21 +137,33 @@ canvas#bg { position: fixed; inset: 0; z-index: 0; }
 }
 .app-icon:hover { transform: translateY(-3px); }
 .app-icon:hover .icon-tile {
-  border-color: rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 18px rgba(var(--accent-rgb),0.1), 0 4px 20px rgba(0,0,0,0.4);
+  border-color: rgba(255,255,255,0.16);
+  border-top-color: rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.055);
+  box-shadow:
+    0 0 28px rgba(var(--accent-rgb),0.14),
+    0 0 60px rgba(var(--accent-rgb),0.06),
+    0 6px 24px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+  transform: translateY(-1px);
+}
+.app-icon:hover .icon-tile svg {
+  filter: drop-shadow(0 0 6px rgba(var(--accent-rgb),0.5));
 }
 .app-icon:hover .icon-label { color: #ccc; }
 
 .icon-tile {
   width: 72px; height: 72px; border-radius: 18px;
-  background: rgba(255,255,255,0.035);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-top-color: rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-top-color: rgba(255,255,255,0.15);
   display: flex; align-items: center; justify-content: center;
-  transition: all 0.22s;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+  transition: all 0.25s ease;
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 2px 16px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    0 0 0 0px rgba(var(--accent-rgb),0);
 }
 .icon-tile svg { width: 30px; height: 30px; }
 
@@ -985,21 +1018,43 @@ function drawParticles(){
 let rainDrops=[],splashes=[];
 function initRain(){
   splashes=[];
-  const cols=Math.floor(W/7);
-  rainDrops=Array.from({length:cols},()=>({x:Math.random()*W,y:Math.random()*-H,speed:Math.random()*5+4,len:Math.random()*28+14,op:Math.random()*0.38+0.12,w:Math.random()*0.7+0.2,wind:Math.random()*1.4+0.8}));
+  const cols=Math.floor(W/9);
+  rainDrops=Array.from({length:cols},()=>({
+    x:Math.random()*W, y:Math.random()*-H,
+    speed:Math.random()*3+2.5,
+    len:Math.random()*18+8,
+    op:Math.random()*0.28+0.06,
+    w:Math.random()*0.6+0.2,
+    wind:(Math.random()-0.3)*0.6  // mostly slight right lean, some variation
+  }));
 }
 function drawRain(){
   ctx.clearRect(0,0,W,H);
   for(let d of rainDrops){
-    const len=d.len*12,dx=d.wind*d.len*3;
-    const g=ctx.createLinearGradient(d.x-dx,d.y-len,d.x,d.y);
-    g.addColorStop(0,'rgba(200,215,255,0)'); g.addColorStop(1,`rgba(210,220,255,${d.op})`);
-    ctx.beginPath(); ctx.moveTo(d.x-dx,d.y-len); ctx.lineTo(d.x,d.y);
+    const dropH = d.len * 10;
+    const dropX = d.wind * dropH;
+    const g=ctx.createLinearGradient(d.x - dropX, d.y - dropH, d.x, d.y);
+    g.addColorStop(0,'rgba(180,200,255,0)');
+    g.addColorStop(0.6,`rgba(200,215,255,${d.op * 0.5})`);
+    g.addColorStop(1,`rgba(215,225,255,${d.op})`);
+    ctx.beginPath(); ctx.moveTo(d.x - dropX, d.y - dropH); ctx.lineTo(d.x, d.y);
     ctx.strokeStyle=g; ctx.lineWidth=d.w; ctx.stroke();
-    d.x+=d.wind*1.4; d.y+=d.speed*5;
-    if(d.y>H||d.x>W+100){if(Math.random()<0.15){splashes.push({x:d.x,y:H-2,vx:(Math.random()-0.5)*2,vy:-Math.random()*2-1,life:1,decay:0.06})}d.y=Math.random()*-300;d.x=Math.random()*W;d.speed=Math.random()*5+4;d.op=Math.random()*0.38+0.12;}
+    d.x += d.wind * 0.8; d.y += d.speed * 4;
+    if(d.y > H + 20){
+      if(Math.random()<0.12) splashes.push({x:d.x,y:H-2,vx:(Math.random()-0.5)*1.5,vy:-Math.random()*1.5-0.5,life:1,decay:0.08});
+      d.y = Math.random() * -H * 0.5;
+      d.x = Math.random() * W;
+      d.speed = Math.random()*3+2.5;
+      d.op = Math.random()*0.28+0.06;
+    }
   }
-  for(let i=splashes.length-1;i>=0;i--){const s=splashes[i];ctx.beginPath();ctx.arc(s.x,s.y,1.5*s.life,0,Math.PI*2);ctx.fillStyle=`rgba(200,220,255,${s.life*0.4})`;ctx.fill();s.x+=s.vx;s.y+=s.vy;s.vy+=0.12;s.life-=s.decay;if(s.life<=0)splashes.splice(i,1);}
+  for(let i=splashes.length-1;i>=0;i--){
+    const s=splashes[i];
+    ctx.beginPath();ctx.arc(s.x,s.y,1.2*s.life,0,Math.PI*2);
+    ctx.fillStyle=`rgba(200,215,255,${s.life*0.3})`;ctx.fill();
+    s.x+=s.vx;s.y+=s.vy;s.vy+=0.1;s.life-=s.decay;
+    if(s.life<=0)splashes.splice(i,1);
+  }
   bgAnimId=requestAnimationFrame(drawRain);
 }
 window.addEventListener('click',e=>{if(currentBg==='rain'){for(let i=0;i<12;i++)splashes.push({x:e.clientX,y:e.clientY,vx:(Math.random()-0.5)*4,vy:-Math.random()*3-1,life:1,decay:0.04});}});
@@ -1129,21 +1184,14 @@ function createTab(url = null) {
 
   const tab = { id, url, title: url ? (()=>{ try{ return new URL(url.startsWith('http')?url:'https://'+url).hostname; }catch(e){ return url.slice(0,20); } })() : 'new tab', frame };
   tabs.push(tab);
-  renderTabs();
-  // animate the new tab in — element now exists after renderTabs
-  const el = document.querySelector(`.browser-tab[data-tab-id="${id}"]`);
-  if (el) {
-    el.classList.add('tab-entering');
-    el.addEventListener('animationend', () => el.classList.remove('tab-entering'), { once: true });
-  }
+  renderTabs(id); // pass id so renderTabs applies entering animation
   setActiveTab(id);
   return tab;
 }
 
-function renderTabs() {
+function renderTabs(enteringId = null) {
   const container = document.getElementById('browserTabs');
   const newBtn = document.getElementById('newTabBtn');
-  // Remove all tab elements (leave + button)
   container.querySelectorAll('.browser-tab').forEach(el => el.remove());
   tabs.forEach(tab => {
     const el = document.createElement('div');
@@ -1153,6 +1201,10 @@ function renderTabs() {
     el.addEventListener('click', e => { if (!e.target.classList.contains('browser-tab-close')) setActiveTab(tab.id); });
     el.querySelector('.browser-tab-close').addEventListener('click', e => { e.stopPropagation(); closeTab(tab.id); });
     container.insertBefore(el, newBtn);
+    if (tab.id === enteringId) {
+      el.classList.add('tab-entering');
+      el.addEventListener('animationend', () => el.classList.remove('tab-entering'), { once: true });
+    }
   });
 }
 
@@ -1161,7 +1213,10 @@ function setActiveTab(id) {
   tabs.forEach(t => { t.frame.classList.toggle('active', t.id === id); });
   const tab = tabs.find(t => t.id === id);
   if (tab) document.getElementById('browserAddr').value = tab.url || '';
-  renderTabs();
+  // Just update active class — don't rebuild DOM
+  document.querySelectorAll('.browser-tab').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.tabId) === id);
+  });
 }
 
 function closeTab(id) {
