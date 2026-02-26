@@ -91,7 +91,9 @@ fastify.get("/api/spotify/*", async (request, reply) => {
 		const token = await getSpotifyToken();
 		const spotifyPath = request.raw.url.slice("/api/spotify/".length);
 		const url = "https://api.spotify.com/v1/" + spotifyPath;
-		console.log("[spotify]", url);
+		console.log("[spotify] raw:", JSON.stringify(request.raw.url));
+		console.log("[spotify] path:", JSON.stringify(spotifyPath));
+		console.log("[spotify] url:", JSON.stringify(url));
 		const res = await fetch(url, {
 			headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
 		});
