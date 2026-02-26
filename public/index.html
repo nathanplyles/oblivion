@@ -1784,7 +1784,10 @@ function getLfmImage(imgs) {
   const sizes = ['extralarge','large','medium','small'];
   for (const s of sizes) {
     const found = imgs.find(i => i.size === s);
-    if (found && found['#text']) return found['#text'];
+    if (found && found['#text']) {
+      const url = found['#text'];
+      return url ? '/api/img/' + url.replace('https://', '') : '';
+    }
   }
   return '';
 }
@@ -1792,13 +1795,14 @@ function getLfmImage(imgs) {
 async function getItunesArt(artist, track) {
   try {
     const q = encodeURIComponent(artist + ' ' + track);
-    const res = await fetch('https://itunes.apple.com/search?term=' + q + '&media=music&limit=5');
+    const res = await fetch('/api/itunes?term=' + q + '&media=music&limit=5');
     if (!res.ok) return null;
     const data = await res.json();
     const match = data.results?.[0];
     if (!match) return null;
-    // iTunes gives 100x100, replace with 600x600
-    return (match.artworkUrl100 || '').replace('100x100', '600x600');
+    const rawUrl = (match.artworkUrl100 || '').replace('100x100bb', '600x600bb');
+    // Proxy the image through our server too
+    return rawUrl ? '/api/img/' + rawUrl.replace('https://', '') : null;
   } catch(e) { return null; }
 }
 
@@ -1924,10 +1928,9 @@ async function playTrack(track) {
 
 async function findYTVideo(q) {
   try {
-    const res = await fetch('https://www.youtube.com/results?search_query=' + encodeURIComponent(q));
-    const txt = await res.text();
-    const m = txt.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-    return m ? m[1] : null;
+    const res = await fetch('/api/ytSearch?q=' + encodeURIComponent(q));
+    const data = await res.json();
+    return data.videoId || null;
   } catch(e) { return null; }
 }
 

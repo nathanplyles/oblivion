@@ -33,29 +33,12 @@ const fastify = Fastify({
 	},
 });
 
-fastify.register(fastifyStatic, {
-	root: publicPath,
-	decorateReply: true,
-});
-fastify.register(fastifyStatic, {
-	root: scramjetPath,
-	prefix: "/scram/",
-	decorateReply: false,
-});
-fastify.register(fastifyStatic, {
-	root: libcurlPath,
-	prefix: "/libcurl/",
-	decorateReply: false,
-});
-fastify.register(fastifyStatic, {
-	root: baremuxPath,
-	prefix: "/baremux/",
-	decorateReply: false,
-});
+fastify.register(fastifyStatic, { root: publicPath, decorateReply: true });
+fastify.register(fastifyStatic, { root: scramjetPath, prefix: "/scram/", decorateReply: false });
+fastify.register(fastifyStatic, { root: libcurlPath, prefix: "/libcurl/", decorateReply: false });
+fastify.register(fastifyStatic, { root: baremuxPath, prefix: "/baremux/", decorateReply: false });
 
-// ── Last.fm proxy ─────────────────────────────────────────────────────
-// Routes /api/lastfm?<qs> → https://ws.audioscrobbler.com/2.0/?<qs>&api_key=<key>
-// Key stays on server, never exposed to browser.
+// ── Last.fm proxy ──────────────────────────────────────────────────────
 fastify.get("/api/lastfm", async (request, reply) => {
 	const key = process.env.LASTFM_API_KEY;
 	if (!key) return reply.code(503).send({ error: "Last.fm not configured." });
@@ -70,16 +53,41 @@ fastify.get("/api/lastfm", async (request, reply) => {
 	}
 });
 
-// ── Image proxy ──────────────────────────────────────────────────────
+// ── iTunes proxy ───────────────────────────────────────────────────────
+fastify.get("/api/itunes", async (request, reply) => {
+	try {
+		const qs = request.raw.url.slice("/api/itunes?".length);
+		const url = "https://itunes.apple.com/search?" + qs;
+		const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+		const text = await res.text();
+		reply.code(res.status).header("content-type", "application/json").send(text);
+	} catch (err) {
+		reply.code(502).send(JSON.stringify({ error: err.message }));
+	}
+});
 
+// ── YouTube video ID lookup proxy ─────────────────────────────────────
+fastify.get("/api/ytSearch", async (request, reply) => {
+	try {
+		const q = request.query.q || "";
+		const url = "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
+		const res = await fetch(url, {
+			headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" }
+		});
+		const text = await res.text();
+		const match = text.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+		reply.send({ videoId: match ? match[1] : null });
+	} catch (err) {
+		reply.code(502).send({ videoId: null });
+	}
+});
 
-
-// Proxy Spotify CDN images — bypasses COEP for album art
+// ── Image proxy ────────────────────────────────────────────────────────
 fastify.get("/api/img/*", async (request, reply) => {
 	try {
 		const imgPath = request.raw.url.slice("/api/img/".length);
 		const url = "https://" + imgPath;
-		const res = await fetch(url);
+		const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
 		if (!res.ok) return reply.code(res.status).send();
 		const buf = Buffer.from(await res.arrayBuffer());
 		const ct = res.headers.get("content-type") || "image/jpeg";
@@ -103,23 +111,13 @@ fastify.server.on("listening", () => {
 	console.log("Listening on:");
 	console.log(`\thttp://localhost:${address.port}`);
 	console.log(`\thttp://${hostname()}:${address.port}`);
-	console.log(
-		`\thttp://${
-			address.family === "IPv6" ? `[${address.address}]` : address.address
-		}:${address.port}`
-	);
+	console.log(`\thttp://${address.family === "IPv6" ? `[${address.address}]` : address.address}:${address.port}`);
 });
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-function shutdown() {
-	console.log("SIGTERM signal received: closing HTTP server");
-	fastify.close();
-	process.exit(0);
-}
+function shutdown() { console.log("SIGTERM signal received: closing HTTP server"); fastify.close(); process.exit(0); }
 
 let port = parseInt(process.env.PORT || "");
 if (isNaN(port)) port = 8080;
-
 fastify.listen({ port, host: "0.0.0.0" });
