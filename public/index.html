@@ -1400,6 +1400,8 @@ function createTab(url = null) {
     const _ntGo = frame.querySelector('.newtab-search-go');
     const _doSearch = () => {
       const v = _ntIn.value.trim(); if (!v) return;
+      // Put value in address bar so browserNavigate can pick it up as fallback
+      document.getElementById('browserAddr').value = v;
       browserNavigate(v.startsWith('http') ? v : v.includes('.') && !v.includes(' ') ? 'https://' + v : null, v);
     };
     _ntIn.addEventListener('keydown', e => { if (e.key === 'Enter') _doSearch(); });

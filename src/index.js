@@ -99,7 +99,6 @@ fastify.get("/api/spotify/*", async (request, reply) => {
 		const rawUrl = request.raw.url;
 		const spotifyPath = rawUrl.slice("/api/spotify/".length);
 		const url = "https://api.spotify.com/v1/" + spotifyPath;
-		console.log("[spotify proxy]", res?.status ?? "->", url);
 		const res = await fetch(url, {
 			headers: { Authorization: `Bearer ${token}` },
 		});
