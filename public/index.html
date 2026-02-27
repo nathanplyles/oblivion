@@ -791,6 +791,7 @@ canvas#bg { position: fixed; inset: 0; z-index: 0; }
 <div class="cursor-glow" id="cursorGlow"></div>
 <div class="cursor-dot" id="cursorDot"></div>
 <div class="panic-flash" id="panicFlash"></div>
+<div id="ytPlayerEl" style="position:fixed;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0;left:-9999px;top:-9999px;"></div>
 <div id="toastContainer"></div>
 
 <!-- ══ HOME SCREEN ══ -->
@@ -918,7 +919,6 @@ canvas#bg { position: fixed; inset: 0; z-index: 0; }
 
 <!-- ══ MUSIC SCREEN ══ -->
 <div class="screen" id="screen-music">
-  <div id="ytPlayerEl" style="position:absolute;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0;left:-9999px;top:-9999px;"></div>
   <div class="music-app" id="musicApp">
     <div class="music-sidebar">
       <div class="music-sidebar-top">
@@ -1620,10 +1620,13 @@ function animCursor() {
   requestAnimationFrame(animCursor);
 }
 animCursor();
-window.addEventListener('mousemove', () => {
+window.addEventListener('mousemove', e => {
   glowEl.style.opacity = '1';
   const activeTag = document.activeElement?.tagName;
-  dotEl.style.opacity = (activeTag === 'INPUT' || activeTag === 'TEXTAREA') ? '0' : '1';
+  const hoverTag = e.target?.tagName;
+  const isTyping = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || hoverTag === 'INPUT' || hoverTag === 'TEXTAREA';
+  dotEl.style.opacity = isTyping ? '0' : '1';
+  trailDots.forEach(d => { d.el.style.opacity = isTyping ? '0' : ''; });
 });
 window.addEventListener('mouseleave', () => { glowEl.style.opacity = '0'; dotEl.style.opacity = '0'; });
 document.addEventListener('focusin', e => {
@@ -2017,21 +2020,23 @@ function initYTPlayer() {
 }
 window.onYouTubeIframeAPIReady = initYTPlayer;
 (function(){
-  // Fetch YT iframe API through our server proxy to avoid COEP/SW issues
-  fetch('/api/ytApi')
-    .then(r => r.text())
-    .then(code => {
-      const s = document.createElement('script');
-      s.textContent = code;
-      document.head.appendChild(s);
-    })
-    .catch(() => {
-      // Fallback: direct load
-      const s = document.createElement('script');
-      s.src = 'https://www.youtube.com/iframe_api';
-      document.head.appendChild(s);
-    });
-  setTimeout(() => { if (!ytPlayer) initYTPlayer(); }, 4000);
+  // Load YT iframe API via server proxy URL so SW/COEP can't block it
+  const s = document.createElement('script');
+  s.src = '/api/ytApi';
+  s.onload = () => { if (typeof YT !== 'undefined' && YT.Player) initYTPlayer(); };
+  s.onerror = () => {
+    // Last resort: direct
+    const s2 = document.createElement('script');
+    s2.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s);
+  // Keep polling — player may init async
+  const poll = setInterval(() => {
+    if (ytReady) { clearInterval(poll); return; }
+    if (typeof YT !== 'undefined' && YT.Player && !ytPlayer) initYTPlayer();
+  }, 500);
+  setTimeout(() => clearInterval(poll), 15000);
 })();
 
 function updatePlayBtn() {

@@ -66,17 +66,26 @@ fastify.get("/api/itunes", async (request, reply) => {
 	}
 });
 
-// ── YouTube iframe API proxy — serves the YT iframe_api script to avoid COEP/SW blocking ──
+// ── YouTube iframe API proxy — serves YT iframe_api as same-origin script ──
+// By serving from our domain, COEP cross-origin restrictions don't apply.
+// The SW is also updated to bypass /api/ routes entirely.
 fastify.get("/api/ytApi", async (request, reply) => {
 	try {
 		const res = await fetch("https://www.youtube.com/iframe_api", {
-			headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+			headers: {
+				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+				"Accept": "*/*",
+			}
 		});
 		const text = await res.text();
-		reply.header("content-type", "application/javascript")
+		console.log("[ytApi] fetched, length:", text.length);
+		reply
+			.header("content-type", "application/javascript; charset=utf-8")
 			.header("cache-control", "public, max-age=3600")
+			.header("cross-origin-resource-policy", "same-origin")
 			.send(text);
 	} catch (err) {
+		console.error("[ytApi] error:", err.message);
 		reply.code(502).send("// ytApi proxy error: " + err.message);
 	}
 });
