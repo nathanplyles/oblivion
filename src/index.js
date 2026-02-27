@@ -43,7 +43,7 @@ fastify.get("/api/saavn", async (request, reply) => {
 	try {
 		const q = request.query.query || "";
 		const limit = request.query.limit || "20";
-		const url = `https://jiosaavn-api.vercel.app/api/search/songs?query=${encodeURIComponent(q)}&limit=${limit}`;
+		const url = `https://saavn.sumit.co/api/search/songs?query=${encodeURIComponent(q)}&limit=${limit}`;
 		console.log("[saavn] fetching:", url);
 		const res = await fetch(url, {
 			headers: {
