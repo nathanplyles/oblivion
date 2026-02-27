@@ -83,48 +83,118 @@ fastify.get("/api/invidious/search", async (request, reply) => {
 	}
 });
 
-// Stream: use yt-dlp style innertube API to get audio URL
+// Stream: try multiple innertube clients for resilience
+const INNERTUBE_CLIENTS = [
+	{
+		name: "IOS",
+		version: "19.09.3",
+		clientName: "5",
+		userAgent: "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)",
+		extraBody: { deviceMake: "Apple", deviceModel: "iPhone14,3", osName: "iPhone", osVersion: "15.6.0.19G360" },
+	},
+	{
+		name: "TV_EMBED",
+		version: "2.0",
+		clientName: "85",
+		userAgent: "Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1",
+		extraBody: {},
+	},
+	{
+		name: "WEB",
+		version: "2.20240101",
+		clientName: "1",
+		userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+		extraBody: {},
+	},
+];
+
+async function getAudioStreams(videoId) {
+	for (const client of INNERTUBE_CLIENTS) {
+		try {
+			const body = JSON.stringify({
+				videoId,
+				context: {
+					client: {
+						clientName: client.name,
+						clientVersion: client.version,
+						hl: "en", gl: "US",
+						...client.extraBody,
+					},
+				},
+			});
+			const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"User-Agent": client.userAgent,
+					"X-YouTube-Client-Name": client.clientName,
+					"X-YouTube-Client-Version": client.version,
+					"Origin": "https://www.youtube.com",
+					"Referer": "https://www.youtube.com/",
+				},
+				body,
+				signal: AbortSignal.timeout(10000),
+			});
+			const json = await res.json();
+			const adaptive = (json?.streamingData?.adaptiveFormats || []).filter(f => f.mimeType?.startsWith("audio") && f.url);
+			const muxed = (json?.streamingData?.formats || []).filter(f => f.url);
+			const all = [...adaptive, ...muxed];
+			if (all.length) {
+				console.log(`[streams] got ${all.length} formats via ${client.name}`);
+				return all;
+			}
+			console.log(`[streams] ${client.name} returned no formats, trying next`);
+		} catch (e) {
+			console.log(`[streams] ${client.name} failed: ${e.message}`);
+		}
+	}
+	throw new Error("all clients failed");
+}
+
 fastify.get("/api/invidious/streams/:videoId", async (request, reply) => {
 	try {
 		const { videoId } = request.params;
 		if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
 			return reply.code(400).send({ error: "invalid videoId" });
 		}
-		// Use YouTube's own innertube API — no key needed for this endpoint
-		const body = JSON.stringify({
-			videoId,
-			context: {
-				client: {
-					clientName: "ANDROID",
-					clientVersion: "19.09.37",
-					androidSdkVersion: 30,
-					hl: "en",
-					gl: "US",
-				},
-			},
-		});
-		const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip",
-				"X-YouTube-Client-Name": "3",
-				"X-YouTube-Client-Version": "19.09.37",
-				"Origin": "https://www.youtube.com",
-			},
-			body,
-			signal: AbortSignal.timeout(10000),
-		});
-		const json = await res.json();
-		const formats = json?.streamingData?.adaptiveFormats || [];
-		const audioFormats = formats.filter(f => f.mimeType?.startsWith("audio") && f.url);
-		if (!audioFormats.length) throw new Error("no audio formats");
+		const formats = await getAudioStreams(videoId);
 		reply.header("content-type", "application/json").send(JSON.stringify({
-			adaptiveFormats: audioFormats,
-			formatStreams: [],
+			adaptiveFormats: formats.filter(f => f.mimeType?.startsWith("audio")),
+			formatStreams: formats.filter(f => !f.mimeType?.startsWith("audio")),
 		}));
 	} catch (err) {
 		console.error("[streams]", err.message);
+		reply.code(502).send(JSON.stringify({ error: err.message }));
+	}
+});
+
+// Artist top tracks — search YouTube Music style
+fastify.get("/api/artist", async (request, reply) => {
+	try {
+		const artist = request.query.name || "";
+		const url = "https://www.youtube.com/results?search_query=" + encodeURIComponent(artist + " songs") + "&sp=EgIQAQ%3D%3D";
+		const res = await fetch(url, { headers: YT_HEADERS, signal: AbortSignal.timeout(8000) });
+		const html = await res.text();
+		const match = html.match(/var ytInitialData = ({.+?});<\/script>/s) || html.match(/ytInitialData = ({.+?});/s);
+		if (!match) throw new Error("no ytInitialData");
+		const data = JSON.parse(match[1]);
+		const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents
+			?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+		const items = contents.filter(i => i.videoRenderer).slice(0, 20).map(i => {
+			const v = i.videoRenderer;
+			const dur = v.lengthText?.simpleText || "";
+			const parts = dur.split(":").map(Number);
+			const secs = parts.length === 3 ? parts[0]*3600+parts[1]*60+parts[2] : parts.length === 2 ? parts[0]*60+parts[1] : 0;
+			return {
+				videoId: v.videoId,
+				title: v.title?.runs?.[0]?.text || "",
+				author: v.ownerText?.runs?.[0]?.text || "",
+				lengthSeconds: secs,
+				thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || "",
+			};
+		}).filter(i => i.videoId && i.lengthSeconds > 0 && i.lengthSeconds < 1200);
+		reply.header("content-type", "application/json").send(JSON.stringify(items));
+	} catch (err) {
 		reply.code(502).send(JSON.stringify({ error: err.message }));
 	}
 });

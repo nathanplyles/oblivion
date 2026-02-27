@@ -635,6 +635,8 @@ canvas#bg { position: fixed; inset: 0; z-index: 0; }
 .music-result-name { font-size: 11px; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; letter-spacing: 0.02em; }
 .music-result-row.playing .music-result-name { color: var(--accent); }
 .music-result-sub { font-size: 10px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.03em; }
+.music-artist-link { cursor: none; color: #555; transition: color 0.15s; }
+.music-artist-link:hover { color: var(--accent); text-decoration: underline; }
 .music-result-dur { font-size: 10px; color: #3a3a3a; flex-shrink: 0; letter-spacing: 0.04em; }
 .music-result-add {
   background: none; border: none; color: #3a3a3a; font-size: 16px; cursor: none;
@@ -1825,11 +1827,7 @@ function getAudio() {
 }
 
 // ── Piped API ────────────────────────────────────────────────────────
-async function pipedSearch(q) {
-  const res = await fetch('/api/invidious/search?q=' + encodeURIComponent(q));
-  if (!res.ok) throw new Error('search failed (' + res.status + ')');
-  const json = await res.json();
-  if (json.error) throw new Error(json.error);
+function parseYtResults(json) {
   return (Array.isArray(json) ? json : []).map(s => ({
     id: s.videoId,
     name: s.title,
@@ -1839,6 +1837,31 @@ async function pipedSearch(q) {
     audioUrl: null,
     _source: 'yt'
   }));
+}
+
+async function pipedSearch(q) {
+  // Append "official audio" for better music results
+  const query = q + ' official audio';
+  const res = await fetch('/api/invidious/search?q=' + encodeURIComponent(query));
+  if (!res.ok) throw new Error('search failed (' + res.status + ')');
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return parseYtResults(json);
+}
+
+async function browseArtist(artistName) {
+  const rightTitle = document.getElementById('musicRightTitle');
+  const rightList = document.getElementById('musicRightList');
+  rightTitle.textContent = artistName;
+  rightList.innerHTML = '<div class="music-results-empty">loading...</div>';
+  try {
+    const res = await fetch('/api/artist?name=' + encodeURIComponent(artistName));
+    const json = await res.json();
+    if (!json.length) { rightList.innerHTML = '<div class="music-results-empty">no results</div>'; return; }
+    renderTrackList(rightList, parseYtResults(json), false);
+  } catch(e) {
+    rightList.innerHTML = '<div class="music-results-empty">failed to load artist</div>';
+  }
 }
 
 async function pipedGetAudioUrl(videoId) {
@@ -1908,12 +1931,19 @@ function makeRow(track, showAdd) {
       : '<div class="music-result-thumb" style="background:var(--surface2);border-radius:5px;"></div>') +
     '<div class="music-result-info">' +
       '<div class="music-result-name">' + esc(track.name) + '</div>' +
-      '<div class="music-result-sub">' + esc(artist) + '</div>' +
+      '<div class="music-result-sub">' +
+        (artist ? '<span class="music-artist-link" data-artist="' + esc(artist) + '">' + esc(artist) + '</span>' : '') +
+      '</div>' +
     '</div>' +
     (dur ? '<span class="music-result-dur">' + dur + '</span>' : '') +
     (showAdd ? '<button class="music-result-add" title="add to queue">+</button>' : '');
   el.addEventListener('click', e => {
     if (e.target.classList.contains('music-result-add')) return;
+    if (e.target.classList.contains('music-artist-link')) {
+      e.stopPropagation();
+      browseArtist(e.target.dataset.artist);
+      return;
+    }
     musicQueue.push(track); musicQueueIdx = musicQueue.length - 1;
     playTrack(track);
   });
