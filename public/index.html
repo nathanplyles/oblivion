@@ -1987,14 +1987,18 @@ async function findYTVideo(q) {
 
 function initYTPlayer() {
   if (typeof YT === 'undefined' || !YT.Player) {
+    console.log('[yt] YT not ready yet, retrying...');
     setTimeout(initYTPlayer, 200);
     return;
   }
+  if (ytPlayer) { console.log('[yt] player already exists'); return; }
+  console.log('[yt] creating YT.Player on element:', document.getElementById('ytPlayerEl'));
   ytPlayer = new YT.Player('ytPlayerEl', {
     width: 1, height: 1,
     playerVars: { autoplay: 1, controls: 0, rel: 0, iv_load_policy: 3, modestbranding: 1, playsinline: 1 },
     events: {
       onReady: () => {
+        console.log('[yt] player ready!');
         ytReady = true;
         ytPlayer.setVolume(musicVol);
         if (pendingVideoId) {
@@ -2034,6 +2038,7 @@ window.onYouTubeIframeAPIReady = initYTPlayer;
   // Keep polling — player may init async
   const poll = setInterval(() => {
     if (ytReady) { clearInterval(poll); return; }
+    console.log('[yt] poll: YT=', typeof YT, 'ytPlayer=', !!ytPlayer, 'ytReady=', ytReady);
     if (typeof YT !== 'undefined' && YT.Player && !ytPlayer) initYTPlayer();
   }, 500);
   setTimeout(() => clearInterval(poll), 15000);
