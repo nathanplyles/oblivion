@@ -1823,34 +1823,36 @@ function getAudio() {
   return audioEl;
 }
 
-// ── Saavn API ─────────────────────────────────────────────────────────
 async function saavnSearch(q) {
   const res = await fetch('/api/saavn?query=' + encodeURIComponent(q) + '&limit=20');
-  if (!res.ok) throw new Error('saavn ' + res.status);
   const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'saavn ' + res.status);
+  // saavn.dev response shape: { data: { results: [...] } }
+  // Each result has: id, name, artists.primary[], duration, image[], downloadUrl[]
   const results = json?.data?.results || [];
-  return results.map(s => ({
-    id: s.id,
-    name: s.name,
-    artist: s.artists?.primary?.[0]?.name || s.primaryArtists || '',
-    duration_ms: (s.duration || 0) * 1000,
-    // image: pick highest quality (index 2 = 500x500, fallback to 1, 0)
-    image: (() => {
-      const imgs = s.image || [];
-      const best = imgs[2] || imgs[1] || imgs[0];
-      const url = best?.url || best?.link || '';
-      return url ? '/api/img/' + url.replace('https://', '') : '';
-    })(),
-    // downloadUrl: pick highest quality (index 4 = 320kbps, fallback down)
-    audioUrl: (() => {
-      const urls = s.downloadUrl || [];
-      for (let i = urls.length - 1; i >= 0; i--) {
-        if (urls[i]?.url) return urls[i].url;
-      }
-      return null;
-    })(),
-    _source: 'saavn'
-  }));
+  return results.map(s => {
+    const imgs = Array.isArray(s.image) ? s.image : [];
+    const best = imgs[2] || imgs[1] || imgs[0];
+    const imgUrl = best?.url || best?.link || '';
+    const dlUrls = Array.isArray(s.downloadUrl) ? s.downloadUrl : [];
+    // highest quality last in array (320kbps)
+    let audioUrl = null;
+    for (let i = dlUrls.length - 1; i >= 0; i--) {
+      if (dlUrls[i]?.url) { audioUrl = dlUrls[i].url; break; }
+    }
+    const artistName = s.artists?.primary?.[0]?.name
+      || (Array.isArray(s.artists?.primary) ? '' : '')
+      || s.primaryArtists || '';
+    return {
+      id: s.id,
+      name: s.name,
+      artist: artistName,
+      duration_ms: (s.duration || 0) * 1000,
+      image: imgUrl ? '/api/img/' + imgUrl.replace('https://', '') : '',
+      audioUrl,
+      _source: 'saavn'
+    };
+  });
 }
 
 // ── Recently played ──────────────────────────────────────────────────
@@ -1881,7 +1883,7 @@ document.getElementById('musicSearch').addEventListener('input', e => {
       renderTrackList(el, tracks, true);
     } catch(err) {
       console.error('[music] search error:', err);
-      el.innerHTML = '<div class="music-results-empty">search failed</div>';
+      el.innerHTML = '<div class="music-results-empty">search failed: ' + err.message + '</div>';
     }
   }, 350);
 });

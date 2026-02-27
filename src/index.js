@@ -38,18 +38,29 @@ fastify.register(fastifyStatic, { root: scramjetPath, prefix: "/scram/", decorat
 fastify.register(fastifyStatic, { root: libcurlPath, prefix: "/libcurl/", decorateReply: false });
 fastify.register(fastifyStatic, { root: baremuxPath, prefix: "/baremux/", decorateReply: false });
 
-// ── Saavn search/stream proxy ──────────────────────────────────────────
-// Proxies saavn.dev so the browser doesn't hit cross-origin issues.
+// ── Saavn search proxy ─────────────────────────────────────────────────
 fastify.get("/api/saavn", async (request, reply) => {
 	try {
-		const qs = new URLSearchParams(request.query).toString();
-		const url = "https://saavn.dev/api/search/songs?" + qs;
+		const q = request.query.query || "";
+		const limit = request.query.limit || "20";
+		const url = `https://saavn.dev/api/search/songs?query=${encodeURIComponent(q)}&limit=${limit}`;
+		console.log("[saavn] fetching:", url);
 		const res = await fetch(url, {
-			headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
+			headers: {
+				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				"Accept": "application/json",
+				"Referer": "https://saavn.dev",
+			},
 		});
+		console.log("[saavn] status:", res.status, "content-type:", res.headers.get("content-type"));
 		const text = await res.text();
-		reply.code(res.status).header("content-type", "application/json").send(text);
+		if (!res.ok) {
+			console.error("[saavn] error body:", text.slice(0, 200));
+			return reply.code(res.status).header("content-type", "application/json").send(JSON.stringify({ error: "saavn returned " + res.status, body: text.slice(0, 200) }));
+		}
+		reply.header("content-type", "application/json").send(text);
 	} catch (err) {
+		console.error("[saavn] fetch error:", err.message);
 		reply.code(502).send(JSON.stringify({ error: err.message }));
 	}
 });
