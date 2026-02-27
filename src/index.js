@@ -182,48 +182,14 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 	}
 });
 
-// Proxy the actual audio bytes so browser doesn't have to hit googlevideo.com directly
-// (avoids COEP/CORS issues and supports range requests for seeking)
+// Redirect browser directly to googlevideo URL — URL is IP-signed to the
+// client so browser must fetch directly (proxying causes 403)
 fastify.get("/api/ytProxy", async (request, reply) => {
 	const url = request.query.url;
 	if (!url || !url.includes("googlevideo.com")) {
 		return reply.code(400).send("invalid url");
 	}
-	try {
-		const headers = {
-			"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			"Origin": "https://www.youtube.com",
-			"Referer": "https://www.youtube.com/",
-		};
-		if (request.headers.range) headers["Range"] = request.headers.range;
-
-		const res = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
-		const ct = res.headers.get("content-type") || "audio/mp4";
-		const cl = res.headers.get("content-length");
-		const cr = res.headers.get("content-range");
-
-		reply.code(res.status);
-		reply.header("content-type", ct);
-		reply.header("accept-ranges", "bytes");
-		reply.header("cross-origin-resource-policy", "cross-origin");
-		if (cl) reply.header("content-length", cl);
-		if (cr) reply.header("content-range", cr);
-
-		// Stream the response body directly
-		const reader = res.body.getReader();
-		const stream = new ReadableStream({
-			async pull(controller) {
-				const { done, value } = await reader.read();
-				if (done) controller.close();
-				else controller.enqueue(value);
-			},
-			cancel() { reader.cancel(); }
-		});
-		reply.send(stream);
-	} catch (err) {
-		console.error("[ytProxy]", err.message);
-		reply.code(502).send();
-	}
+	reply.redirect(url);
 });
 
 // ── Image proxy ────────────────────────────────────────────────────────
