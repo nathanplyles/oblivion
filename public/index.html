@@ -634,9 +634,9 @@ canvas#bg { position: fixed; inset: 0; z-index: 0; }
 .music-result-info { flex: 1; min-width: 0; }
 .music-result-name { font-size: 11px; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; letter-spacing: 0.02em; }
 .music-result-row.playing .music-result-name { color: var(--accent); }
-.music-result-sub { font-size: 10px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.03em; }
-.music-artist-link { cursor: none; color: #555; transition: color 0.15s; }
+.music-artist-link { color: #555; cursor: none; transition: color 0.15s; }
 .music-artist-link:hover { color: var(--accent); text-decoration: underline; }
+.music-result-sub { font-size: 10px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.03em; }
 .music-result-dur { font-size: 10px; color: #3a3a3a; flex-shrink: 0; letter-spacing: 0.04em; }
 .music-result-add {
   background: none; border: none; color: #3a3a3a; font-size: 16px; cursor: none;
@@ -1777,110 +1777,132 @@ document.getElementById('resetCloak').addEventListener('click', () => {
   currentCloakIcon = '/void-icon.svg';
 });
 
-// ── MUSIC ────────────────────────────────────────────────────────────────
-// Plain <audio> element approach — no YouTube IFrame API, no COEP issues.
 // ── MUSIC ───────────────────────────────────────────────────────────────
-// Audio via Piped API — open-source YouTube frontend, full songs, no auth.
-// Search: /api/invidious/search?q=<q>  → videoId, title, author, lengthSeconds, videoThumbnails
-// Stream: /api/invidious/streams/<videoId> → adaptiveFormats[].url (audio-only) or formatStreams[].url
+// Last.fm for search/metadata, iTunes for art, YouTube IFrame for audio
+// YouTube player lives in /player.html (no COEP) and talks via postMessage
 
-let audioEl = null;
 let musicQueue = [], musicQueueIdx = -1, currentTrack = null;
 let musicPlaying = false, musicShuffleOn = false, musicRepeatOn = false;
 let musicVol = 80, progressDragging = false, progressTimer = null;
 let _playingId = null;
+let playerReady = false;
+let playerFrame = null;
 
-function getAudio() {
-  if (!audioEl) {
-    audioEl = new Audio();
-    audioEl.crossOrigin = 'anonymous';
-    audioEl.volume = musicVol / 100;
-    audioEl.addEventListener('play',  () => { musicPlaying = true;  updatePlayBtn(); startTimer(); });
-    audioEl.addEventListener('pause', () => { musicPlaying = false; updatePlayBtn(); });
-    audioEl.addEventListener('ended', () => {
+// ── Player iframe ─────────────────────────────────────────────────────
+function initPlayerFrame() {
+  if (playerFrame) return;
+  playerFrame = document.createElement('iframe');
+  playerFrame.src = '/player.html';
+  playerFrame.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:none;';
+  playerFrame.allow = 'autoplay';
+  document.body.appendChild(playerFrame);
+}
+
+function playerSend(cmd) {
+  if (playerFrame) playerFrame.contentWindow.postMessage(cmd, '*');
+}
+
+window.addEventListener('message', e => {
+  if (!e.data || !e.data.type) return;
+  if (e.data.type === 'PLAYER_READY') {
+    playerReady = true;
+    console.log('[music] YT player ready');
+  } else if (e.data.type === 'STATE') {
+    const YT_PLAYING = 1, YT_PAUSED = 2, YT_ENDED = 0;
+    if (e.data.state === YT_PLAYING) {
+      musicPlaying = true; updatePlayBtn(); startProgressTimer();
+    } else if (e.data.state === YT_PAUSED) {
       musicPlaying = false; updatePlayBtn();
-      if (musicRepeatOn) { audioEl.currentTime = 0; audioEl.play(); }
+    } else if (e.data.state === YT_ENDED) {
+      musicPlaying = false; updatePlayBtn();
+      if (musicRepeatOn) { playerSend({ action: 'seek', time: 0 }); playerSend({ action: 'resume' }); }
       else if (musicShuffleOn && musicQueue.length > 1) {
         musicQueueIdx = Math.floor(Math.random() * musicQueue.length);
         playTrack(musicQueue[musicQueueIdx]);
       } else if (musicQueueIdx < musicQueue.length - 1) {
         musicQueueIdx++; playTrack(musicQueue[musicQueueIdx]);
       }
-    });
-    audioEl.addEventListener('error', e => {
-      console.error('[audio] error', audioEl.error);
-      toast('playback error — try another track', 'error', 3000);
-    });
-    audioEl.addEventListener('timeupdate', () => {
-      if (progressDragging) return;
-      const cur = audioEl.currentTime, dur = audioEl.duration || 0;
-      if (dur > 0) {
-        const pct = (cur / dur) * 100;
-        document.getElementById('musicProgressFill').style.width = pct + '%';
-        document.getElementById('musicProgressThumb').style.left = pct + '%';
-        document.getElementById('musicCurrentTime').textContent = fmtTime(Math.floor(cur));
-        document.getElementById('musicDuration').textContent = fmtTime(Math.floor(dur));
-      }
-    });
+    }
+  } else if (e.data.type === 'TIME') {
+    if (progressDragging) return;
+    const cur = e.data.current || 0, dur = e.data.duration || 0;
+    if (dur > 0) {
+      const pct = (cur / dur) * 100;
+      document.getElementById('musicProgressFill').style.width = pct + '%';
+      document.getElementById('musicProgressThumb').style.left = pct + '%';
+      document.getElementById('musicCurrentTime').textContent = fmtTime(Math.floor(cur));
+      document.getElementById('musicDuration').textContent = fmtTime(Math.floor(dur));
+    }
+  } else if (e.data.type === 'ERROR') {
+    toast('playback error (code ' + e.data.code + ') — trying next result', 'error', 3000);
   }
-  return audioEl;
+});
+
+function startProgressTimer() {
+  clearInterval(progressTimer);
+  progressTimer = setInterval(() => playerSend({ action: 'getTime' }), 500);
 }
 
-// ── Piped API ────────────────────────────────────────────────────────
-function parseYtResults(json) {
-  return (Array.isArray(json) ? json : []).map(s => ({
-    id: s.videoId,
-    name: s.title,
-    artist: s.author || '',
-    duration_ms: (s.lengthSeconds || 0) * 1000,
-    image: s.thumb ? '/api/img/' + s.thumb.replace('https://', '') : '',
-    audioUrl: null,
-    _source: 'yt'
+// ── Last.fm + iTunes ──────────────────────────────────────────────────
+async function lastfmFetch(params) {
+  const qs = Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+  const res = await fetch('/api/lastfm?' + qs);
+  if (!res.ok) throw new Error('lastfm ' + res.status);
+  return res.json();
+}
+
+function getLfmImage(imgs) {
+  if (!imgs) return '';
+  for (const size of ['extralarge','large','medium','small']) {
+    const f = imgs.find(i => i.size === size);
+    if (f && f['#text']) return '/api/img/' + f['#text'].replace('https://', '');
+  }
+  return '';
+}
+
+async function getItunesArt(artist, track) {
+  try {
+    const q = encodeURIComponent(artist + ' ' + track);
+    const res = await fetch('/api/itunes?term=' + q + '&media=music&limit=3');
+    if (!res.ok) return null;
+    const data = await res.json();
+    const match = data.results?.[0];
+    if (!match?.artworkUrl100) return null;
+    const raw = match.artworkUrl100.replace('100x100bb', '600x600bb');
+    return '/api/img/' + raw.replace('https://', '');
+  } catch(e) { return null; }
+}
+
+async function musicSearch(q) {
+  const data = await lastfmFetch({ method: 'track.search', track: q, limit: 20 });
+  const tracks = data.results?.trackmatches?.track || [];
+  if (!Array.isArray(tracks)) return [];
+  return tracks.map(t => ({
+    id: t.mbid || (t.artist + '||' + t.name),
+    name: t.name,
+    artist: t.artist,
+    duration_ms: parseInt(t.duration || 0) * 1000,
+    image: getLfmImage(t.image),
+    _lfm: true
   }));
 }
 
-async function pipedSearch(q) {
-  // Append "official audio" for better music results
-  const query = q + ' official audio';
-  const res = await fetch('/api/invidious/search?q=' + encodeURIComponent(query));
-  if (!res.ok) throw new Error('search failed (' + res.status + ')');
-  const json = await res.json();
-  if (json.error) throw new Error(json.error);
-  return parseYtResults(json);
+async function enrichArt(tracks) {
+  return Promise.all(tracks.map(async t => {
+    const art = await getItunesArt(t.artist, t.name);
+    return art ? { ...t, image: art } : t;
+  }));
 }
 
-async function browseArtist(artistName) {
-  const rightTitle = document.getElementById('musicRightTitle');
-  const rightList = document.getElementById('musicRightList');
-  rightTitle.textContent = artistName;
-  rightList.innerHTML = '<div class="music-results-empty">loading...</div>';
-  try {
-    const res = await fetch('/api/artist?name=' + encodeURIComponent(artistName));
-    const json = await res.json();
-    if (!json.length) { rightList.innerHTML = '<div class="music-results-empty">no results</div>'; return; }
-    renderTrackList(rightList, parseYtResults(json), false);
-  } catch(e) {
-    rightList.innerHTML = '<div class="music-results-empty">failed to load artist</div>';
-  }
+// ── YouTube video lookup ──────────────────────────────────────────────
+async function findVideoId(artist, trackName) {
+  const q = artist + ' ' + trackName + ' official audio';
+  const res = await fetch('/api/ytSearch?q=' + encodeURIComponent(q));
+  const data = await res.json();
+  return data.videoId || null;
 }
 
-async function pipedGetAudioUrl(videoId) {
-  const res = await fetch('/api/invidious/streams/' + videoId);
-  if (!res.ok) throw new Error('stream fetch failed (' + res.status + ')');
-  const json = await res.json();
-  if (json.error) throw new Error(json.error);
-  // Invidious returns adaptiveFormats (audio-only) and formatStreams (muxed)
-  const adaptive = (json.adaptiveFormats || []).filter(s => s.url && s.type?.startsWith('audio'));
-  const muxed = (json.formatStreams || []).filter(s => s.url);
-  const streams = [...adaptive, ...muxed];
-  // prefer m4a/mp4 audio, then highest bitrate
-  const m4a = streams.filter(s => s.type?.includes('mp4') || s.encoding?.includes('aac'));
-  const picked = (m4a.length ? m4a : streams).sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
-  if (!picked) throw new Error('no audio stream found');
-  return picked.url;
-}
-
-// ── Recently played ──────────────────────────────────────────────────
+// ── Recently played ───────────────────────────────────────────────────
 let recentlyPlayed = [];
 function addToRecent(track) {
   recentlyPlayed = recentlyPlayed.filter(t => t.id !== track.id);
@@ -1888,11 +1910,8 @@ function addToRecent(track) {
   if (recentlyPlayed.length > 30) recentlyPlayed.pop();
   renderTrackList(document.getElementById('musicRightList'), recentlyPlayed, false);
 }
-function loadFeatured() {
-  document.getElementById('musicRightList').innerHTML = '<div class="music-results-empty">play a song to see history</div>';
-}
 
-// ── Search ───────────────────────────────────────────────────────────
+// ── Search ────────────────────────────────────────────────────────────
 let searchTimer = null;
 document.getElementById('musicSearch').addEventListener('input', e => {
   clearTimeout(searchTimer);
@@ -1902,16 +1921,41 @@ document.getElementById('musicSearch').addEventListener('input', e => {
   el.innerHTML = '<div class="music-results-empty">searching...</div>';
   searchTimer = setTimeout(async () => {
     try {
-      const tracks = await pipedSearch(q);
+      const tracks = await musicSearch(q);
       if (!tracks.length) { el.innerHTML = '<div class="music-results-empty">no results</div>'; return; }
+      el.innerHTML = '<div class="music-results-empty">loading art...</div>';
+      const enriched = await enrichArt(tracks);
       el.innerHTML = '';
-      renderTrackList(el, tracks, true);
+      renderTrackList(el, enriched, true);
     } catch(err) {
-      console.error('[music] search error:', err);
-      el.innerHTML = '<div class="music-results-empty">search failed: ' + err.message + '</div>';
+      el.innerHTML = '<div class="music-results-empty">search failed — check last.fm key</div>';
     }
   }, 350);
 });
+
+async function browseArtist(artistName) {
+  const rightTitle = document.getElementById('musicRightTitle');
+  const rightList = document.getElementById('musicRightList');
+  rightTitle.textContent = artistName;
+  rightList.innerHTML = '<div class="music-results-empty">loading...</div>';
+  try {
+    const data = await lastfmFetch({ method: 'artist.gettoptracks', artist: artistName, limit: 20 });
+    const raw = data.toptracks?.track || [];
+    const tracks = raw.map(t => ({
+      id: t.mbid || (artistName + '||' + t.name),
+      name: t.name,
+      artist: artistName,
+      duration_ms: parseInt(t.duration || 0) * 1000,
+      image: getLfmImage(t.image),
+      _lfm: true
+    }));
+    if (!tracks.length) { rightList.innerHTML = '<div class="music-results-empty">no tracks found</div>'; return; }
+    const enriched = await enrichArt(tracks);
+    renderTrackList(rightList, enriched, false);
+  } catch(e) {
+    rightList.innerHTML = '<div class="music-results-empty">failed to load artist</div>';
+  }
+}
 
 function renderTrackList(container, tracks, showAdd) {
   container.innerHTML = '';
@@ -1940,9 +1984,7 @@ function makeRow(track, showAdd) {
   el.addEventListener('click', e => {
     if (e.target.classList.contains('music-result-add')) return;
     if (e.target.classList.contains('music-artist-link')) {
-      e.stopPropagation();
-      browseArtist(e.target.dataset.artist);
-      return;
+      e.stopPropagation(); browseArtist(e.target.dataset.artist); return;
     }
     musicQueue.push(track); musicQueueIdx = musicQueue.length - 1;
     playTrack(track);
@@ -1967,13 +2009,13 @@ function renderQueue() {
   });
 }
 
-// ── Core playback ────────────────────────────────────────────────────
+// ── Playback ──────────────────────────────────────────────────────────
 async function playTrack(track) {
+  if (_playingId === track.id && musicPlaying) return;
   _playingId = track.id;
   currentTrack = track;
   addToRecent(track);
 
-  // Update UI immediately
   document.getElementById('musicTrackTitle').textContent = track.name;
   document.getElementById('musicTrackArtist').textContent = track.artist || '';
   const artEl = document.getElementById('musicArt');
@@ -1993,37 +2035,27 @@ async function playTrack(track) {
   );
   renderQueue();
 
-  // Fetch audio stream URL from Piped then play
+  document.getElementById('toastContainer').innerHTML = '';
+  toast('finding audio…', 'info', 10000);
   try {
+    const videoId = await findVideoId(track.artist, track.name);
+    if (_playingId !== track.id) return;
+    if (!videoId) { document.getElementById('toastContainer').innerHTML = ''; toast('not found on youtube', 'error', 3000); return; }
     document.getElementById('toastContainer').innerHTML = '';
-    toast('finding stream…', 'info', 8000);
-    const audioUrl = await pipedGetAudioUrl(track.id);
-    if (_playingId !== track.id) return; // track changed while loading
-    document.getElementById('toastContainer').innerHTML = '';
-    toast('loading…', 'info', 4000);
-    const audio = getAudio();
-    audio.pause();
-    audio.src = audioUrl;
-    audio.volume = musicVol / 100;
-    await audio.play();
-    document.getElementById('toastContainer').innerHTML = '';
-    musicPlaying = true;
-    updatePlayBtn();
+    playerSend({ action: 'play', videoId, volume: musicVol });
+    musicPlaying = true; updatePlayBtn();
   } catch(e) {
     document.getElementById('toastContainer').innerHTML = '';
-    toast('playback failed: ' + e.message, 'error', 4000);
-    console.error('[music] playback error:', e);
+    toast('error: ' + e.message, 'error', 3000);
   }
 }
 
-// ── Controls ─────────────────────────────────────────────────────────
+// ── Controls ──────────────────────────────────────────────────────────
 function updatePlayBtn() {
   document.getElementById('musicPlayIcon').innerHTML = musicPlaying
     ? '<rect x="5" y="4" width="4" height="12" rx="1" fill="currentColor"/><rect x="11" y="4" width="4" height="12" rx="1" fill="currentColor"/>'
     : '<path d="M6 4l11 6-11 6V4z"/>';
 }
-
-function startTimer() { /* handled by timeupdate event on audio element */ }
 
 function makeDraggable(barId, fillId, thumbId, onVal) {
   const bar = document.getElementById(barId), fill = document.getElementById(fillId), thumb = document.getElementById(thumbId);
@@ -2036,24 +2068,25 @@ function makeDraggable(barId, fillId, thumbId, onVal) {
 
 makeDraggable('musicProgressBar','musicProgressFill','musicProgressThumb', (v, drag) => {
   progressDragging = drag;
-  if (!drag && audioEl) audioEl.currentTime = v * (audioEl.duration || 0);
+  if (!drag) playerSend({ action: 'seek', time: v * 300 }); // rough seek, player corrects
 });
 makeDraggable('musicVolumeBar','musicVolumeFill','musicVolumeThumb', v => {
   musicVol = Math.round(v * 100);
-  if (audioEl) audioEl.volume = musicVol / 100;
+  playerSend({ action: 'volume', volume: musicVol });
 });
 
 document.getElementById('musicPlay').addEventListener('click', () => {
-  const a = getAudio();
-  if (!a.src) return;
-  musicPlaying ? a.pause() : a.play();
+  if (!currentTrack) return;
+  if (musicPlaying) { playerSend({ action: 'pause' }); musicPlaying = false; }
+  else { playerSend({ action: 'resume' }); musicPlaying = true; }
+  updatePlayBtn();
 });
 document.getElementById('musicNext').addEventListener('click', () => {
   if (musicShuffleOn && musicQueue.length > 1) { musicQueueIdx = Math.floor(Math.random() * musicQueue.length); playTrack(musicQueue[musicQueueIdx]); }
   else if (musicQueueIdx < musicQueue.length - 1) { musicQueueIdx++; playTrack(musicQueue[musicQueueIdx]); }
 });
 document.getElementById('musicPrev').addEventListener('click', () => {
-  if (audioEl && audioEl.currentTime > 3) { audioEl.currentTime = 0; return; }
+  playerSend({ action: 'seek', time: 0 });
   if (musicQueueIdx > 0) { musicQueueIdx--; playTrack(musicQueue[musicQueueIdx]); }
 });
 document.getElementById('musicShuffle').addEventListener('click', () => {
@@ -2064,7 +2097,6 @@ document.getElementById('musicRepeat').addEventListener('click', () => {
   musicRepeatOn = !musicRepeatOn;
   document.getElementById('musicRepeat').classList.toggle('on', musicRepeatOn);
 });
-
 document.querySelectorAll('.music-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.music-tab').forEach(b => b.classList.remove('active'));
@@ -2077,6 +2109,7 @@ document.querySelectorAll('.music-tab').forEach(btn => {
 function fmtTime(s) { return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+// ── Init ──────────────────────────────────────────────────────────────
 let musicInited = false;
 document.querySelectorAll('.taskbar-btn[data-screen="music"],.app-icon[data-screen="music"]').forEach(el => {
   el.addEventListener('click', () => {
@@ -2086,9 +2119,9 @@ document.querySelectorAll('.taskbar-btn[data-screen="music"],.app-icon[data-scre
 
 async function musicInit() {
   document.getElementById('musicApp').classList.add('ready');
-  loadFeatured();
+  document.getElementById('musicRightList').innerHTML = '<div class="music-results-empty">play a song to see history</div>';
+  initPlayerFrame();
 }
-
 </script>
 </body>
 </html>
