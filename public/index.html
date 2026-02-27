@@ -791,7 +791,7 @@ canvas#bg { position: fixed; inset: 0; z-index: 0; }
 <div class="cursor-glow" id="cursorGlow"></div>
 <div class="cursor-dot" id="cursorDot"></div>
 <div class="panic-flash" id="panicFlash"></div>
-<div id="ytPlayerEl" style="position:fixed;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0;left:-9999px;top:-9999px;"></div>
+<div id="ytPlayerEl" style="position:fixed;width:200px;height:200px;pointer-events:none;visibility:hidden;left:-9999px;top:-9999px;"></div>
 <div id="toastContainer"></div>
 
 <!-- ══ HOME SCREEN ══ -->
@@ -1994,8 +1994,9 @@ function initYTPlayer() {
   if (ytPlayer) { console.log('[yt] player already exists'); return; }
   console.log('[yt] creating YT.Player on element:', document.getElementById('ytPlayerEl'));
   ytPlayer = new YT.Player('ytPlayerEl', {
-    width: 1, height: 1,
-    playerVars: { autoplay: 1, controls: 0, rel: 0, iv_load_policy: 3, modestbranding: 1, playsinline: 1 },
+    width: 200, height: 200,
+    videoId: 'M7lc1UVf-VE',
+    playerVars: { autoplay: 0, controls: 0, rel: 0, iv_load_policy: 3, modestbranding: 1, playsinline: 1, mute: 1 },
     events: {
       onReady: () => {
         console.log('[yt] player ready!');
