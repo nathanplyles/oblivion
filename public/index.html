@@ -1897,9 +1897,17 @@ async function enrichArt(tracks) {
 // ── YouTube video lookup ──────────────────────────────────────────────
 async function findVideoId(artist, trackName) {
   const q = artist + ' ' + trackName + ' official audio';
-  const res = await fetch('/api/ytSearch?q=' + encodeURIComponent(q));
-  const data = await res.json();
-  return data.videoId || null;
+  console.log('[music] searching YT for:', q);
+  try {
+    const res = await fetch('/api/ytSearch?q=' + encodeURIComponent(q));
+    if (!res.ok) throw new Error('ytSearch ' + res.status);
+    const data = await res.json();
+    console.log('[music] videoId:', data.videoId);
+    return data.videoId || null;
+  } catch(e) {
+    console.error('[music] findVideoId error:', e);
+    return null;
+  }
 }
 
 // ── Recently played ───────────────────────────────────────────────────
@@ -2040,13 +2048,19 @@ async function playTrack(track) {
   try {
     const videoId = await findVideoId(track.artist, track.name);
     if (_playingId !== track.id) return;
-    if (!videoId) { document.getElementById('toastContainer').innerHTML = ''; toast('not found on youtube', 'error', 3000); return; }
     document.getElementById('toastContainer').innerHTML = '';
+    if (!videoId) { toast('not found on youtube', 'error', 3000); return; }
+    toast('playing…', 'success', 2000);
+    // Wait for player to be ready before sending
+    let waited = 0;
+    while (!playerReady && waited < 8000) { await new Promise(r => setTimeout(r, 200)); waited += 200; }
+    if (!playerReady) { toast('player not ready — reload page', 'error', 4000); return; }
     playerSend({ action: 'play', videoId, volume: musicVol });
     musicPlaying = true; updatePlayBtn();
   } catch(e) {
     document.getElementById('toastContainer').innerHTML = '';
     toast('error: ' + e.message, 'error', 3000);
+    console.error('[music] playTrack error:', e);
   }
 }
 
