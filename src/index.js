@@ -22,12 +22,8 @@ const fastify = Fastify({
 	serverFactory: (handler) => {
 		return createServer()
 			.on("request", (req, res) => {
-				if (req.url !== "/player.html") {
-					res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-					res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
-				}
-				// player.html intentionally has no COOP/COEP so YouTube iframe loads
-				// and postMessage back to parent is not blocked
+				res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+				res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
 				handler(req, res);
 			})
 			.on("upgrade", (req, socket, head) => {
@@ -57,7 +53,7 @@ fastify.get("/api/lastfm", async (request, reply) => {
 	}
 });
 
-// ── iTunes proxy (album art 600x600) ──────────────────────────────────
+// ── iTunes proxy ───────────────────────────────────────────────────────
 fastify.get("/api/itunes", async (request, reply) => {
 	try {
 		const qs = request.raw.url.slice("/api/itunes?".length);
@@ -71,12 +67,11 @@ fastify.get("/api/itunes", async (request, reply) => {
 	}
 });
 
-// ── YouTube search proxy ───────────────────────────────────────────────
+// ── YouTube search ─────────────────────────────────────────────────────
 fastify.get("/api/ytSearch", async (request, reply) => {
 	try {
 		const q = request.query.q || "";
-		const url = "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
-		const res = await fetch(url, {
+		const res = await fetch("https://www.youtube.com/results?search_query=" + encodeURIComponent(q), {
 			headers: {
 				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 				"Accept-Language": "en-US,en;q=0.9",
@@ -88,6 +83,146 @@ fastify.get("/api/ytSearch", async (request, reply) => {
 		reply.send({ videoId: m ? m[1] : null });
 	} catch (err) {
 		reply.code(502).send({ videoId: null });
+	}
+});
+
+// ── YouTube audio extraction + stream proxy ────────────────────────────
+// Extracts direct audio URL from YouTube using the TV client (most reliable,
+// returns unthrottled URLs), then proxies the audio through our server so
+// the browser can play it with a plain <audio> element — no iframe needed.
+
+async function getYouTubeAudioUrl(videoId) {
+	// Try multiple innertube clients — TV client is most reliable for audio
+	const clients = [
+		{
+			clientName: "TVHTML5",
+			clientVersion: "7.20240101.09.00",
+			userAgent: "Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1",
+			clientNameNum: "7",
+		},
+		{
+			clientName: "IOS",
+			clientVersion: "19.29.1",
+			userAgent: "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)",
+			clientNameNum: "5",
+		},
+		{
+			clientName: "ANDROID",
+			clientVersion: "19.30.36",
+			userAgent: "com.google.android.youtube/19.30.36 (Linux; U; Android 11) gzip",
+			clientNameNum: "3",
+		},
+	];
+
+	for (const client of clients) {
+		try {
+			const body = {
+				videoId,
+				context: {
+					client: {
+						clientName: client.clientName,
+						clientVersion: client.clientVersion,
+						hl: "en",
+						gl: "US",
+					},
+				},
+			};
+			const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"User-Agent": client.userAgent,
+					"X-YouTube-Client-Name": client.clientNameNum,
+					"X-YouTube-Client-Version": client.clientVersion,
+					"Origin": "https://www.youtube.com",
+					"Referer": "https://www.youtube.com/",
+				},
+				body: JSON.stringify(body),
+				signal: AbortSignal.timeout(10000),
+			});
+
+			if (!res.ok) { console.log(`[yt] ${client.clientName} HTTP ${res.status}`); continue; }
+
+			const data = await res.json();
+			const status = data?.playabilityStatus?.status;
+			if (status !== "OK") { console.log(`[yt] ${client.clientName} status: ${status}`); continue; }
+
+			const formats = data?.streamingData?.adaptiveFormats || [];
+			const audioFormats = formats
+				.filter(f => f.mimeType?.startsWith("audio") && f.url)
+				.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+
+			if (audioFormats.length) {
+				console.log(`[yt] got audio via ${client.clientName}, bitrate: ${audioFormats[0].bitrate}`);
+				return audioFormats[0].url;
+			}
+
+			// Some clients return signatureCipher instead of url — skip for now
+			console.log(`[yt] ${client.clientName} no direct URL`);
+		} catch (e) {
+			console.log(`[yt] ${client.clientName} error: ${e.message}`);
+		}
+	}
+	return null;
+}
+
+// Returns the direct audio URL (browser fetches it directly or via proxy)
+fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
+	const { videoId } = request.params;
+	if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+		return reply.code(400).send({ error: "invalid videoId" });
+	}
+	try {
+		const url = await getYouTubeAudioUrl(videoId);
+		if (!url) return reply.code(404).send({ error: "no audio stream found" });
+		reply.send({ url });
+	} catch (err) {
+		console.error("[ytAudio]", err.message);
+		reply.code(502).send({ error: err.message });
+	}
+});
+
+// Proxy the actual audio bytes so browser doesn't have to hit googlevideo.com directly
+// (avoids COEP/CORS issues and supports range requests for seeking)
+fastify.get("/api/ytProxy", async (request, reply) => {
+	const url = request.query.url;
+	if (!url || !url.includes("googlevideo.com")) {
+		return reply.code(400).send("invalid url");
+	}
+	try {
+		const headers = {
+			"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+			"Origin": "https://www.youtube.com",
+			"Referer": "https://www.youtube.com/",
+		};
+		if (request.headers.range) headers["Range"] = request.headers.range;
+
+		const res = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
+		const ct = res.headers.get("content-type") || "audio/mp4";
+		const cl = res.headers.get("content-length");
+		const cr = res.headers.get("content-range");
+
+		reply.code(res.status);
+		reply.header("content-type", ct);
+		reply.header("accept-ranges", "bytes");
+		reply.header("cross-origin-resource-policy", "cross-origin");
+		if (cl) reply.header("content-length", cl);
+		if (cr) reply.header("content-range", cr);
+
+		// Stream the response body directly
+		const reader = res.body.getReader();
+		const stream = new ReadableStream({
+			async pull(controller) {
+				const { done, value } = await reader.read();
+				if (done) controller.close();
+				else controller.enqueue(value);
+			},
+			cancel() { reader.cancel(); }
+		});
+		reply.send(stream);
+	} catch (err) {
+		console.error("[ytProxy]", err.message);
+		reply.code(502).send();
 	}
 });
 

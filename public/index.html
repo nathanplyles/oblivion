@@ -1778,72 +1778,50 @@ document.getElementById('resetCloak').addEventListener('click', () => {
 });
 
 // ── MUSIC ───────────────────────────────────────────────────────────────
-// Last.fm for search/metadata, iTunes for art, YouTube IFrame for audio
-// YouTube player lives in /player.html (no COEP) and talks via postMessage
+// Last.fm for search/metadata, iTunes for art, YouTube innertube for audio
+// Plain <audio> element — no iframe, no postMessage, no COEP issues
 
+let audioEl = null;
 let musicQueue = [], musicQueueIdx = -1, currentTrack = null;
 let musicPlaying = false, musicShuffleOn = false, musicRepeatOn = false;
-let musicVol = 80, progressDragging = false, progressTimer = null;
+let musicVol = 80, progressDragging = false;
 let _playingId = null;
-let playerReady = false;
-let playerFrame = null;
 
-// ── Player iframe ─────────────────────────────────────────────────────
-function initPlayerFrame() {
-  if (playerFrame) return;
-  playerFrame = document.createElement('iframe');
-  playerFrame.src = '/player.html';
-  playerFrame.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:320px;height:180px;border:none;visibility:hidden;';
-  playerFrame.allow = 'autoplay';
-  document.body.appendChild(playerFrame);
-}
-
-function playerSend(cmd) {
-  if (playerFrame) playerFrame.contentWindow.postMessage(cmd, '*');
-}
-
-window.addEventListener('message', e => {
-  if (!e.data || !e.data.type) return;
-  if (e.data.type === 'PLAYER_READY') {
-    playerReady = true;
-    console.log('[music] YT player ready');
-  } else if (e.data.type === 'STATE') {
-    const YT_PLAYING = 1, YT_PAUSED = 2, YT_ENDED = 0;
-    if (e.data.state === YT_PLAYING) {
-      musicPlaying = true; updatePlayBtn(); startProgressTimer();
-    } else if (e.data.state === YT_PAUSED) {
+function getAudio() {
+  if (!audioEl) {
+    audioEl = new Audio();
+    audioEl.volume = musicVol / 100;
+    audioEl.addEventListener('play', () => { musicPlaying = true; updatePlayBtn(); });
+    audioEl.addEventListener('pause', () => { musicPlaying = false; updatePlayBtn(); });
+    audioEl.addEventListener('ended', () => {
       musicPlaying = false; updatePlayBtn();
-    } else if (e.data.state === YT_ENDED) {
-      musicPlaying = false; updatePlayBtn();
-      if (musicRepeatOn) { playerSend({ action: 'seek', time: 0 }); playerSend({ action: 'resume' }); }
+      if (musicRepeatOn) { audioEl.currentTime = 0; audioEl.play(); }
       else if (musicShuffleOn && musicQueue.length > 1) {
         musicQueueIdx = Math.floor(Math.random() * musicQueue.length);
         playTrack(musicQueue[musicQueueIdx]);
       } else if (musicQueueIdx < musicQueue.length - 1) {
         musicQueueIdx++; playTrack(musicQueue[musicQueueIdx]);
       }
-    }
-  } else if (e.data.type === 'TIME') {
-    if (progressDragging) return;
-    const cur = e.data.current || 0, dur = e.data.duration || 0;
-    if (dur > 0) {
-      const pct = (cur / dur) * 100;
-      document.getElementById('musicProgressFill').style.width = pct + '%';
-      document.getElementById('musicProgressThumb').style.left = pct + '%';
-      document.getElementById('musicCurrentTime').textContent = fmtTime(Math.floor(cur));
-      document.getElementById('musicDuration').textContent = fmtTime(Math.floor(dur));
-    }
-  } else if (e.data.type === 'ERROR') {
-    toast('playback error (code ' + e.data.code + ') — trying next result', 'error', 3000);
+    });
+    audioEl.addEventListener('error', () => {
+      toast('playback error — try another track', 'error', 3000);
+    });
+    audioEl.addEventListener('timeupdate', () => {
+      if (progressDragging) return;
+      const cur = audioEl.currentTime, dur = audioEl.duration || 0;
+      if (dur > 0) {
+        const pct = (cur / dur) * 100;
+        document.getElementById('musicProgressFill').style.width = pct + '%';
+        document.getElementById('musicProgressThumb').style.left = pct + '%';
+        document.getElementById('musicCurrentTime').textContent = fmtTime(Math.floor(cur));
+        document.getElementById('musicDuration').textContent = fmtTime(Math.floor(dur));
+      }
+    });
   }
-});
-
-function startProgressTimer() {
-  clearInterval(progressTimer);
-  progressTimer = setInterval(() => playerSend({ action: 'getTime' }), 500);
+  return audioEl;
 }
 
-// ── Last.fm + iTunes ──────────────────────────────────────────────────
+// ── Last.fm ───────────────────────────────────────────────────────────
 async function lastfmFetch(params) {
   const qs = Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   const res = await fetch('/api/lastfm?' + qs);
@@ -1883,7 +1861,6 @@ async function musicSearch(q) {
     artist: t.artist,
     duration_ms: parseInt(t.duration || 0) * 1000,
     image: getLfmImage(t.image),
-    _lfm: true
   }));
 }
 
@@ -1894,20 +1871,21 @@ async function enrichArt(tracks) {
   }));
 }
 
-// ── YouTube video lookup ──────────────────────────────────────────────
-async function findVideoId(artist, trackName) {
-  const q = artist + ' ' + trackName + ' official audio';
-  console.log('[music] searching YT for:', q);
-  try {
-    const res = await fetch('/api/ytSearch?q=' + encodeURIComponent(q));
-    if (!res.ok) throw new Error('ytSearch ' + res.status);
-    const data = await res.json();
-    console.log('[music] videoId:', data.videoId);
-    return data.videoId || null;
-  } catch(e) {
-    console.error('[music] findVideoId error:', e);
-    return null;
-  }
+// ── YouTube audio ─────────────────────────────────────────────────────
+async function findVideoId(artist, name) {
+  const q = artist + ' ' + name + ' official audio';
+  const res = await fetch('/api/ytSearch?q=' + encodeURIComponent(q));
+  const data = await res.json();
+  return data.videoId || null;
+}
+
+async function getAudioSrc(videoId) {
+  const res = await fetch('/api/ytAudio/' + videoId);
+  if (!res.ok) throw new Error('audio fetch failed ' + res.status);
+  const data = await res.json();
+  if (!data.url) throw new Error('no url returned');
+  // Proxy through our server so browser can play it without CORS issues
+  return '/api/ytProxy?url=' + encodeURIComponent(data.url);
 }
 
 // ── Recently played ───────────────────────────────────────────────────
@@ -1931,12 +1909,12 @@ document.getElementById('musicSearch').addEventListener('input', e => {
     try {
       const tracks = await musicSearch(q);
       if (!tracks.length) { el.innerHTML = '<div class="music-results-empty">no results</div>'; return; }
-      el.innerHTML = '<div class="music-results-empty">loading art...</div>';
-      const enriched = await enrichArt(tracks);
       el.innerHTML = '';
-      renderTrackList(el, enriched, true);
+      renderTrackList(el, tracks, true);
+      enrichArt(tracks).then(enriched => { el.innerHTML = ''; renderTrackList(el, enriched, true); });
     } catch(err) {
-      el.innerHTML = '<div class="music-results-empty">search failed — check last.fm key</div>';
+      el.innerHTML = '<div class="music-results-empty">search failed — is LASTFM_API_KEY set?</div>';
+      console.error('[music] search error:', err);
     }
   }, 350);
 });
@@ -1955,11 +1933,10 @@ async function browseArtist(artistName) {
       artist: artistName,
       duration_ms: parseInt(t.duration || 0) * 1000,
       image: getLfmImage(t.image),
-      _lfm: true
     }));
     if (!tracks.length) { rightList.innerHTML = '<div class="music-results-empty">no tracks found</div>'; return; }
-    const enriched = await enrichArt(tracks);
-    renderTrackList(rightList, enriched, false);
+    renderTrackList(rightList, tracks, false);
+    enrichArt(tracks).then(enriched => { rightList.innerHTML = ''; renderTrackList(rightList, enriched, false); });
   } catch(e) {
     rightList.innerHTML = '<div class="music-results-empty">failed to load artist</div>';
   }
@@ -2027,7 +2004,7 @@ async function playTrack(track) {
   document.getElementById('musicTrackTitle').textContent = track.name;
   document.getElementById('musicTrackArtist').textContent = track.artist || '';
   const artEl = document.getElementById('musicArt');
-  const bgEl  = document.getElementById('musicArtBg');
+  const bgEl = document.getElementById('musicArtBg');
   if (track.image) {
     artEl.src = track.image; artEl.classList.add('on');
     bgEl.style.backgroundImage = 'url(' + track.image + ')'; bgEl.classList.add('on');
@@ -2043,23 +2020,30 @@ async function playTrack(track) {
   );
   renderQueue();
 
-  document.getElementById('toastContainer').innerHTML = '';
-  toast('finding audio…', 'info', 10000);
+  const tc = document.getElementById('toastContainer');
+  tc.innerHTML = '';
+  toast('searching...', 'info', 10000);
   try {
     const videoId = await findVideoId(track.artist, track.name);
     if (_playingId !== track.id) return;
-    document.getElementById('toastContainer').innerHTML = '';
-    if (!videoId) { toast('not found on youtube', 'error', 3000); return; }
-    toast('playing…', 'success', 2000);
-    // Wait for player to be ready before sending
-    let waited = 0;
-    while (!playerReady && waited < 8000) { await new Promise(r => setTimeout(r, 200)); waited += 200; }
-    if (!playerReady) { toast('player not ready — reload page', 'error', 4000); return; }
-    playerSend({ action: 'play', videoId, volume: musicVol });
-    musicPlaying = true; updatePlayBtn();
+    if (!videoId) { tc.innerHTML = ''; toast('not found on youtube', 'error', 3000); return; }
+
+    tc.innerHTML = '';
+    toast('loading audio...', 'info', 15000);
+    const src = await getAudioSrc(videoId);
+    if (_playingId !== track.id) return;
+
+    tc.innerHTML = '';
+    const audio = getAudio();
+    audio.pause();
+    audio.src = src;
+    audio.volume = musicVol / 100;
+    await audio.play();
+    musicPlaying = true;
+    updatePlayBtn();
   } catch(e) {
     document.getElementById('toastContainer').innerHTML = '';
-    toast('error: ' + e.message, 'error', 3000);
+    toast('failed: ' + e.message, 'error', 4000);
     console.error('[music] playTrack error:', e);
   }
 }
@@ -2077,30 +2061,28 @@ function makeDraggable(barId, fillId, thumbId, onVal) {
   const calc = e => { const r = bar.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
   bar.addEventListener('mousedown', e => { down = true; const v = calc(e); fill.style.width=(v*100)+'%'; if(thumb) thumb.style.left=(v*100)+'%'; onVal(v,true); });
   window.addEventListener('mousemove', e => { if(!down) return; const v=calc(e); fill.style.width=(v*100)+'%'; if(thumb) thumb.style.left=(v*100)+'%'; onVal(v,true); });
-  window.addEventListener('mouseup',  e => { if(!down) return; down=false; const v=calc(e); fill.style.width=(v*100)+'%'; if(thumb) thumb.style.left=(v*100)+'%'; onVal(v,false); });
+  window.addEventListener('mouseup', e => { if(!down) return; down=false; const v=calc(e); fill.style.width=(v*100)+'%'; if(thumb) thumb.style.left=(v*100)+'%'; onVal(v,false); });
 }
 
 makeDraggable('musicProgressBar','musicProgressFill','musicProgressThumb', (v, drag) => {
   progressDragging = drag;
-  if (!drag) playerSend({ action: 'seek', time: v * 300 }); // rough seek, player corrects
+  if (!drag && audioEl) audioEl.currentTime = v * (audioEl.duration || 0);
 });
 makeDraggable('musicVolumeBar','musicVolumeFill','musicVolumeThumb', v => {
   musicVol = Math.round(v * 100);
-  playerSend({ action: 'volume', volume: musicVol });
+  if (audioEl) audioEl.volume = musicVol / 100;
 });
 
 document.getElementById('musicPlay').addEventListener('click', () => {
-  if (!currentTrack) return;
-  if (musicPlaying) { playerSend({ action: 'pause' }); musicPlaying = false; }
-  else { playerSend({ action: 'resume' }); musicPlaying = true; }
-  updatePlayBtn();
+  if (!audioEl || !audioEl.src) return;
+  musicPlaying ? audioEl.pause() : audioEl.play();
 });
 document.getElementById('musicNext').addEventListener('click', () => {
   if (musicShuffleOn && musicQueue.length > 1) { musicQueueIdx = Math.floor(Math.random() * musicQueue.length); playTrack(musicQueue[musicQueueIdx]); }
   else if (musicQueueIdx < musicQueue.length - 1) { musicQueueIdx++; playTrack(musicQueue[musicQueueIdx]); }
 });
 document.getElementById('musicPrev').addEventListener('click', () => {
-  playerSend({ action: 'seek', time: 0 });
+  if (audioEl && audioEl.currentTime > 3) { audioEl.currentTime = 0; return; }
   if (musicQueueIdx > 0) { musicQueueIdx--; playTrack(musicQueue[musicQueueIdx]); }
 });
 document.getElementById('musicShuffle').addEventListener('click', () => {
@@ -2123,10 +2105,6 @@ document.querySelectorAll('.music-tab').forEach(btn => {
 function fmtTime(s) { return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-// ── Init ──────────────────────────────────────────────────────────────
-// Init player iframe immediately on page load so YT is ready before music opens
-initPlayerFrame();
-
 let musicInited = false;
 document.querySelectorAll('.taskbar-btn[data-screen="music"],.app-icon[data-screen="music"]').forEach(el => {
   el.addEventListener('click', () => {
@@ -2134,7 +2112,7 @@ document.querySelectorAll('.taskbar-btn[data-screen="music"],.app-icon[data-scre
   }, true);
 });
 
-async function musicInit() {
+function musicInit() {
   document.getElementById('musicApp').classList.add('ready');
   document.getElementById('musicRightList').innerHTML = '<div class="music-results-empty">play a song to see history</div>';
 }
