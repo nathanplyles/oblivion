@@ -66,36 +66,42 @@ fastify.get("/api/itunes", async (request, reply) => {
 	}
 });
 
-// ── YouTube helpers (zero dependencies, uses innertube API) ───────────
-// Uses YouTube's internal /youtubei/v1/player endpoint — much more
-// reliable than scraping the watch page HTML.
-
-// Uses the TV client — no API key required, works reliably
+// ── YouTube audio — iOS client (most reliable, no key needed) ─────────
+// The iOS client reliably returns direct mp4a audio URLs without
+// needing visitor data or API keys. Tested working as of 2025.
 async function getStreamingData(videoId) {
 	const url = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
 	const body = JSON.stringify({
 		context: {
 			client: {
-				clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
-				clientVersion: "2.0",
+				clientName: "IOS",
+				clientVersion: "19.45.4",
+				deviceModel: "iPhone16,2",
+				deviceMake: "Apple",
+				osName: "iPhone",
+				osVersion: "18.1.0.22B83",
 				hl: "en",
 				gl: "US",
 				utcOffsetMinutes: 0,
 			},
-			thirdParty: {
-				embedUrl: "https://www.youtube.com/",
-			},
 		},
 		videoId,
+		playbackContext: {
+			contentPlaybackContext: {
+				html5Preference: "HTML5_PREF_WANTS",
+			},
+		},
+		contentCheckOk: true,
+		racyCheckOk: true,
 	});
 	const res = await fetch(url, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
-			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1",
+			"User-Agent": "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)",
+			"X-Youtube-Client-Name": "5",
+			"X-Youtube-Client-Version": "19.45.4",
 			"Origin": "https://www.youtube.com",
-			"X-Youtube-Client-Name": "85",
-			"X-Youtube-Client-Version": "2.0",
 		},
 		body,
 	});
