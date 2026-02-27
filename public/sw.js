@@ -5,6 +5,18 @@ const scramjet = new ScramjetServiceWorker();
 
 async function handleRequest(event) {
 	await scramjet.loadConfig();
+
+	// Don't intercept YouTube iframe API or other trusted external scripts
+	const url = event.request.url;
+	if (
+		url.includes("youtube.com/iframe_api") ||
+		url.includes("ytimg.com") ||
+		url.includes("youtube.com/embed") ||
+		url.startsWith(self.location.origin + "/api/")
+	) {
+		return fetch(event.request);
+	}
+
 	if (scramjet.route(event)) {
 		return scramjet.fetch(event);
 	}

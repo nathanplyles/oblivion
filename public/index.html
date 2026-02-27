@@ -58,7 +58,8 @@ canvas#bg { position: fixed; inset: 0; z-index: 0; }
 }
 .cursor-trail {
   position: fixed; border-radius: 50%; pointer-events: none; z-index: 99997;
-  transform: translate(-50%,-50%); background: rgba(235,245,220,0.9);
+  transform: translate(-50%,-50%); background: rgba(235,245,220,0.92);
+  transition: width 0.06s ease, height 0.06s ease;
 }
 
 /* ── PANIC FLASH ── */
@@ -1624,26 +1625,38 @@ window.addEventListener('mousemove', () => { glowEl.style.opacity = '1'; dotEl.s
 window.addEventListener('mouseleave', () => { glowEl.style.opacity = '0'; dotEl.style.opacity = '0'; });
 
 // Trail
-const TRAIL_COUNT = 20;
+const TRAIL_COUNT = 28;
+// Base sizes — front dots are larger and bulge more
+const TRAIL_BASE = Array.from({ length: TRAIL_COUNT }, (_, i) => Math.max(1.5, 9.5 - i * 0.28));
 const trailDots = Array.from({ length: TRAIL_COUNT }, (_, i) => {
   const el = document.createElement('div');
   el.className = 'cursor-trail';
-  const size = Math.max(2, 7 - i * 0.28);
-  el.style.cssText = `width:${size}px;height:${size}px;opacity:0;`;
+  el.style.cssText = `width:${TRAIL_BASE[i]}px;height:${TRAIL_BASE[i]}px;opacity:0;`;
   document.body.appendChild(el);
-  return { el, x: -9999, y: -9999 };
+  return { el, x: -9999, y: -9999, vx: 0, vy: 0 };
 });
 let trailVisible = false;
+let trailTick = 0;
 function animTrail() {
-  trailDots[0].x += (mouse.x - trailDots[0].x) * 0.6;
-  trailDots[0].y += (mouse.y - trailDots[0].y) * 0.6;
+  trailTick++;
+  // Less smoothing = snappier, more responsive feel
+  trailDots[0].x += (mouse.x - trailDots[0].x) * 0.82;
+  trailDots[0].y += (mouse.y - trailDots[0].y) * 0.82;
   for (let i = 1; i < TRAIL_COUNT; i++) {
-    trailDots[i].x += (trailDots[i-1].x - trailDots[i].x) * 0.35;
-    trailDots[i].y += (trailDots[i-1].y - trailDots[i].y) * 0.35;
+    trailDots[i].x += (trailDots[i-1].x - trailDots[i].x) * 0.55;
+    trailDots[i].y += (trailDots[i-1].y - trailDots[i].y) * 0.55;
   }
   trailDots.forEach((d, i) => {
-    d.el.style.left = d.x + 'px'; d.el.style.top = d.y + 'px';
-    d.el.style.opacity = trailVisible ? (1 - i / TRAIL_COUNT) * 0.9 : 0;
+    // Wave bulge: sine wave travelling down the trail over time
+    const wave = Math.sin((i * 0.55) - (trailTick * 0.18)) * 0.5 + 0.5; // 0..1
+    const bulge = 1 + wave * 0.7; // scale up to 1.7x at peak
+    const baseSize = TRAIL_BASE[i];
+    const size = baseSize * bulge;
+    d.el.style.width = size + 'px';
+    d.el.style.height = size + 'px';
+    d.el.style.left = d.x + 'px';
+    d.el.style.top = d.y + 'px';
+    d.el.style.opacity = trailVisible ? (1 - i / TRAIL_COUNT) * 0.88 : 0;
   });
   requestAnimationFrame(animTrail);
 }
@@ -1921,9 +1934,35 @@ async function playTrack(track) {
   try {
     const vid = await findYTVideo(artist + ' ' + track.name + ' audio');
     if (!vid) { toast('audio not found', 'error'); return; }
-    if (ytReady && ytPlayer) { ytPlayer.loadVideoById(vid); ytPlayer.setVolume(musicVol); musicPlaying = true; updatePlayBtn(); }
-    else { pendingVideoId = vid; }
-  } catch(e) { toast('playback error', 'error'); }
+    toast('loading…', 'info', 2000);
+    if (ytReady && ytPlayer) {
+      ytPlayer.loadVideoById(vid);
+      ytPlayer.setVolume(musicVol);
+      musicPlaying = true;
+      updatePlayBtn();
+    } else {
+      // Player not ready yet — store and wait
+      pendingVideoId = vid;
+      // If player never initialized, kick it off now
+      if (!ytPlayer) initYTPlayer();
+      // Wait up to 5s for player to become ready
+      let waited = 0;
+      const waitForPlayer = setInterval(() => {
+        waited += 200;
+        if (ytReady && ytPlayer && pendingVideoId) {
+          clearInterval(waitForPlayer);
+          ytPlayer.loadVideoById(pendingVideoId);
+          ytPlayer.setVolume(musicVol);
+          musicPlaying = true;
+          updatePlayBtn();
+          pendingVideoId = null;
+        } else if (waited > 5000) {
+          clearInterval(waitForPlayer);
+          toast('player failed to load — try again', 'error', 3000);
+        }
+      }, 200);
+    }
+  } catch(e) { toast('playback error: ' + e.message, 'error', 3000); }
 }
 
 async function findYTVideo(q) {
@@ -1934,14 +1973,24 @@ async function findYTVideo(q) {
   } catch(e) { return null; }
 }
 
-window.onYouTubeIframeAPIReady = function() {
+function initYTPlayer() {
+  if (typeof YT === 'undefined' || !YT.Player) {
+    setTimeout(initYTPlayer, 200);
+    return;
+  }
   ytPlayer = new YT.Player('ytPlayerEl', {
     width: 1, height: 1,
-    playerVars: { autoplay: 0, controls: 0, rel: 0, iv_load_policy: 3, modestbranding: 1, playsinline: 1 },
+    playerVars: { autoplay: 1, controls: 0, rel: 0, iv_load_policy: 3, modestbranding: 1, playsinline: 1 },
     events: {
       onReady: () => {
-        ytReady = true; ytPlayer.setVolume(musicVol);
-        if (pendingVideoId) { ytPlayer.loadVideoById(pendingVideoId); musicPlaying = true; updatePlayBtn(); pendingVideoId = null; }
+        ytReady = true;
+        ytPlayer.setVolume(musicVol);
+        if (pendingVideoId) {
+          ytPlayer.loadVideoById(pendingVideoId);
+          musicPlaying = true;
+          updatePlayBtn();
+          pendingVideoId = null;
+        }
       },
       onStateChange: e => {
         if (e.data === YT.PlayerState.PLAYING) { musicPlaying = true; updatePlayBtn(); startTimer(); }
@@ -1952,11 +2001,23 @@ window.onYouTubeIframeAPIReady = function() {
           else if (musicShuffleOn && musicQueue.length > 1) { musicQueueIdx = Math.floor(Math.random() * musicQueue.length); playTrack(musicQueue[musicQueueIdx]); }
           else if (musicQueueIdx < musicQueue.length - 1) { musicQueueIdx++; playTrack(musicQueue[musicQueueIdx]); }
         }
-      }
+      },
+      onError: e => { toast('playback error: ' + e.data, 'error', 3000); }
     }
   });
-};
-(function(){ const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s); })();
+}
+window.onYouTubeIframeAPIReady = initYTPlayer;
+(function(){
+  const s = document.createElement('script');
+  // Use youtube-nocookie for better COEP compatibility
+  s.src = 'https://www.youtube.com/iframe_api';
+  s.setAttribute('crossorigin', 'anonymous');
+  // Don't let SW intercept this
+  s.setAttribute('data-scramjet-ignore', 'true');
+  document.head.appendChild(s);
+  // Fallback: if API never fires onYouTubeIframeAPIReady, try manually
+  setTimeout(() => { if (!ytPlayer) initYTPlayer(); }, 3000);
+})();
 
 function updatePlayBtn() {
   document.getElementById('musicPlayIcon').innerHTML = musicPlaying
