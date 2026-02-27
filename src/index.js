@@ -66,62 +66,61 @@ fastify.get("/api/itunes", async (request, reply) => {
 	}
 });
 
-// ── YouTube iframe API proxy — serves YT iframe_api as same-origin script ──
-// By serving from our domain, COEP cross-origin restrictions don't apply.
-// The SW is also updated to bypass /api/ routes entirely.
-fastify.get("/api/ytApi", async (request, reply) => {
-	try {
-		const res = await fetch("https://www.youtube.com/iframe_api", {
-			headers: {
-				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-				"Accept": "*/*",
-			}
-		});
-		const text = await res.text();
-		console.log("[ytApi] fetched, length:", text.length);
-		reply
-			.header("content-type", "application/javascript; charset=utf-8")
-			.header("cache-control", "public, max-age=3600")
-			.header("cross-origin-resource-policy", "same-origin")
-			.send(text);
-	} catch (err) {
-		console.error("[ytApi] error:", err.message);
-		reply.code(502).send("// ytApi proxy error: " + err.message);
-	}
-});
+// ── YouTube: search + audio stream proxy ──────────────────────────────
+// Uses ytdl-core to extract audio-only stream URLs server-side.
+// Frontend uses a plain <audio> element — no iframes, no COEP issues.
+import ytdl from "@distube/ytdl-core";
 
-// ── YouTube video ID lookup proxy ─────────────────────────────────────
+// Search YouTube for a video ID by query string
 fastify.get("/api/ytSearch", async (request, reply) => {
 	try {
 		const q = request.query.q || "";
-		// Try YouTube search page first
 		const url = "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
 		const res = await fetch(url, {
 			headers: {
-				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 				"Accept-Language": "en-US,en;q=0.9",
-				"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 			}
 		});
 		const text = await res.text();
-		// Try multiple patterns YouTube uses
-		const patterns = [
-			/"videoId":"([a-zA-Z0-9_-]{11})"/,
-			/"videoId":"([a-zA-Z0-9_-]{11})"/,
-			/watch\?v=([a-zA-Z0-9_-]{11})/,
-		];
-		for (const pattern of patterns) {
-			const match = text.match(pattern);
-			if (match) {
-				console.log("[ytSearch] found:", match[1], "for:", q);
-				return reply.send({ videoId: match[1] });
-			}
+		const match = text.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+		if (match) {
+			console.log("[ytSearch] found:", match[1], "for:", q);
+			return reply.send({ videoId: match[1] });
 		}
-		console.log("[ytSearch] no video found for:", q, "status:", res.status, "body length:", text.length);
 		reply.send({ videoId: null });
 	} catch (err) {
 		console.error("[ytSearch] error:", err.message);
 		reply.code(502).send({ videoId: null });
+	}
+});
+
+// Stream audio for a given YouTube video ID directly to the browser
+fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
+	const { videoId } = request.params;
+	if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+		return reply.code(400).send({ error: "invalid videoId" });
+	}
+	try {
+		const videoUrl = "https://www.youtube.com/watch?v=" + videoId;
+		// Get info first to set content-length if available
+		const info = await ytdl.getInfo(videoUrl);
+		const format = ytdl.chooseFormat(info.formats, {
+			quality: "highestaudio",
+			filter: "audioonly",
+		});
+		console.log("[ytAudio] streaming", videoId, format.mimeType, format.audioBitrate + "kbps");
+		reply
+			.header("content-type", format.mimeType || "audio/webm")
+			.header("accept-ranges", "bytes")
+			.header("cache-control", "no-cache")
+			.header("cross-origin-resource-policy", "same-origin");
+		const stream = ytdl(videoUrl, { format });
+		// Pipe the ytdl stream into the reply
+		reply.send(stream);
+	} catch (err) {
+		console.error("[ytAudio] error for", videoId, err.message);
+		reply.code(502).send({ error: err.message });
 	}
 });
 
