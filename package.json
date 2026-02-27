@@ -4,8 +4,8 @@
 	"description": "The demo application for Scramjet, a high-performance web proxy.",
 	"type": "module",
 	"engines": {
-		"npm": ">=7.0.0",
-		"node": ">=16.0.0"
+		"node": "20.x",
+		"npm": ">=7.0.0"
 	},
 	"scripts": {
 		"start": "node src/index.js",
