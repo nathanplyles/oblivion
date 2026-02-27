@@ -22,10 +22,12 @@ const fastify = Fastify({
 	serverFactory: (handler) => {
 		return createServer()
 			.on("request", (req, res) => {
-				res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
 				if (req.url !== "/player.html") {
+					res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
 					res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
 				}
+				// player.html intentionally has no COOP/COEP so YouTube iframe loads
+				// and postMessage back to parent is not blocked
 				handler(req, res);
 			})
 			.on("upgrade", (req, socket, head) => {
