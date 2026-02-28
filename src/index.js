@@ -94,7 +94,7 @@ fastify.get("/api/ytSearch", async (request, reply) => {
 import { spawn } from "node:child_process";
 
 const COOKIES_PATH = process.env.COOKIES_PATH || (process.env.RENDER ? "/app/cookies.txt" : new URL("../../cookies.txt", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"));
-const YT_DLP_ARGS = ["-f", "140/251/139", "--get-url", "--no-playlist", "--no-warnings", "--js-runtimes", "node", "--remote-components", "ejs:github", "--cookies", COOKIES_PATH];
+const YT_DLP_ARGS = ["-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio", "--get-url", "--no-playlist", "--no-warnings", "--js-runtimes", "node", "--remote-components", "ejs:github", "--cookies", COOKIES_PATH];
 
 function trySpawn(cmd, args, videoId) {
 	return new Promise((resolve, reject) => {
