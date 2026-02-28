@@ -90,66 +90,79 @@ fastify.get("/api/ytSearch", async (request, reply) => {
 	}
 });
 
-// ── YouTube audio via Invidious API ───────────────────────────────────
-// Multiple Invidious instances for redundancy
-const INVIDIOUS_INSTANCES = [
-	"https://inv.nadeko.net",
-	"https://invidious.privacydev.net",
-	"https://iv.datura.network",
-	"https://invidious.nerdvpn.de",
-];
+// ── YouTube audio via yt-dlp ───────────────────────────────────────────
+import { spawn } from "node:child_process";
 
-async function getAudioUrlFromInvidious(videoId) {
+const COOKIES_PATH = process.env.COOKIES_PATH || (process.env.RENDER ? "/app/cookies.txt" : new URL("../../cookies.txt", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"));
+const YT_DLP_ARGS = ["-f", "140/251/139", "--get-url", "--no-playlist", "--no-warnings", "--js-runtimes", "node", "--remote-components", "ejs:github", "--cookies", COOKIES_PATH];
+
+function trySpawn(cmd, args, videoId) {
+	return new Promise((resolve, reject) => {
+		const proc = spawn(cmd, [...args, "https://www.youtube.com/watch?v=" + videoId], { shell: false });
+		let out = "", err = "";
+		proc.stdout.on("data", d => out += d);
+		proc.stderr.on("data", d => err += d);
+		proc.on("close", code => {
+			const url = out.trim().split("\n")[0].trim();
+			if (code === 0 && url.startsWith("http")) resolve(url);
+			else reject(Object.assign(new Error(err.trim().slice(0, 300) || "exit " + code), { isEnoent: false }));
+		});
+		proc.on("error", e => reject(Object.assign(new Error("ENOENT"), { isEnoent: true })));
+		setTimeout(() => { try { proc.kill(); } catch {} reject(new Error("timeout")); }, 25000);
+	});
+}
+
+async function ytdlpGetUrl(videoId) {
+	const attempts = [
+		{ cmd: "py",      args: ["-m", "yt_dlp", ...YT_DLP_ARGS] },
+		{ cmd: "yt-dlp",  args: YT_DLP_ARGS },
+		{ cmd: "python3", args: ["-m", "yt_dlp", ...YT_DLP_ARGS] },
+		{ cmd: "python",  args: ["-m", "yt_dlp", ...YT_DLP_ARGS] },
+	];
 	let lastErr;
-	for (const instance of INVIDIOUS_INSTANCES) {
+	for (const { cmd, args } of attempts) {
 		try {
-			const res = await fetch(`${instance}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`, {
-				headers: { "User-Agent": "Mozilla/5.0" },
-				signal: AbortSignal.timeout(8000),
-			});
-			if (!res.ok) continue;
-			const data = await res.json();
-			// Try adaptive audio formats first (best quality)
-			const adaptive = (data.adaptiveFormats || [])
-				.filter(f => f.type?.startsWith("audio/") && f.url)
-				.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-			if (adaptive.length) {
-				console.log(`[invidious] ✓ ${instance} → ${adaptive[0].type}`);
-				return adaptive[0].url;
-			}
-			// Fallback to combined format streams
-			const streams = (data.formatStreams || []).filter(f => f.url);
-			if (streams.length) {
-				console.log(`[invidious] ✓ ${instance} → stream fallback`);
-				return streams[streams.length - 1].url;
-			}
+			console.log(`[yt-dlp] trying: ${cmd} ${args.join(" ")} ${videoId}`);
+			const url = await trySpawn(cmd, args, videoId);
+			console.log(`[yt-dlp] got url from ${cmd}: ${url.slice(0, 80)}...`);
+			return url;
 		} catch (e) {
-			console.warn(`[invidious] ${instance} failed:`, e.message);
+			console.log(`[yt-dlp] ${cmd} failed: isEnoent=${e.isEnoent} msg=${e.message.slice(0,200)}`);
+			if (e.isEnoent) continue;
 			lastErr = e;
+			if (e.message.includes("not available") || e.message.includes("Private video")) throw e;
 		}
 	}
-	throw lastErr || new Error("All Invidious instances failed");
+	throw lastErr || new Error("yt-dlp not found — install with: pip install yt-dlp");
 }
 
 fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 	const { videoId } = request.params;
+	console.log(`[ytAudio] request for videoId: ${videoId}`);
 	if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+		console.log(`[ytAudio] invalid videoId: ${videoId}`);
 		return reply.code(400).send({ error: "invalid videoId" });
 	}
 	try {
-		const cdnUrl = await getAudioUrlFromInvidious(videoId);
-		console.log(`[ytAudio] ✓ streaming ${videoId}`);
+		console.log(`[ytAudio] calling ytdlpGetUrl...`);
+		const cdnUrl = await ytdlpGetUrl(videoId);
+		console.log(`[yt-dlp] ✓ got CDN url for ${videoId}: ${cdnUrl.slice(0, 100)}...`);
 
+		console.log(`[ytAudio] fetching CDN url...`);
+		const rangeHeader = request.headers["range"];
 		const cdnRes = await fetch(cdnUrl, {
 			headers: {
-				"User-Agent": "Mozilla/5.0",
-				...(request.headers["range"] ? { "Range": request.headers["range"] } : {}),
+				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+				"Accept": "*/*",
+				"Accept-Language": "en-US,en;q=0.9",
+				"Referer": "https://www.youtube.com/",
+				...(rangeHeader ? { "Range": rangeHeader } : {}),
 			},
 			signal: AbortSignal.timeout(30000),
 		});
 
+		console.log(`[ytAudio] CDN response: ${cdnRes.status}`);
 		if (!cdnRes.ok && cdnRes.status !== 206) {
-			console.error(`[ytAudio] CDN ${cdnRes.status}`);
 			return reply.code(502).send({ error: "CDN " + cdnRes.status });
 		}
 
@@ -165,7 +178,7 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 		if (cr) reply.header("content-range", cr);
 		return reply.send(cdnRes.body);
 	} catch (err) {
-		console.error("[ytAudio]", err.message);
+		console.error("[ytAudio] FULL ERROR:", err);
 		reply.code(502).send({ error: err.message });
 	}
 });

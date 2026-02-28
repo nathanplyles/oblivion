@@ -1589,6 +1589,28 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
 </div><!-- /app-root -->
 
 <script src="/scram/scramjet.all.js"></script>
+<script>
+// Clear stale Scramjet IDB on version mismatch to prevent NotFoundError
+(async () => {
+  try {
+    const dbs = await indexedDB.databases?.() || [];
+    const hasScramjet = dbs.some(d => d.name === '$scramjet');
+    if (hasScramjet) {
+      // Check if SW version changed by comparing a stored hash
+      const stored = localStorage.getItem('_sjVer');
+      const current = '3'; // bump this when scramjet updates
+      if (stored !== current) {
+        await new Promise((res, rej) => {
+          const req = indexedDB.deleteDatabase('$scramjet');
+          req.onsuccess = res; req.onerror = rej;
+        });
+        localStorage.setItem('_sjVer', current);
+        console.log('[scramjet] cleared stale IDB');
+      }
+    }
+  } catch(e) { console.warn('[scramjet] IDB clear failed:', e); }
+})();
+</script>
 <script src="/baremux/index.js"></script>
 <script src="/register-sw.js"></script>
 <script>
@@ -2371,7 +2393,6 @@ async function findVideoId(artist, name) {
 }
 
 function getAudioSrc(videoId) {
-  // /api/ytAudio/:id now streams audio directly — no JSON, no proxy step
   return '/api/ytAudio/' + videoId;
 }
 
