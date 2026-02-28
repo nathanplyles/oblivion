@@ -23,7 +23,7 @@ const fastify = Fastify({
 		return createServer()
 			.on("request", (req, res) => {
 				res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-				res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+				res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
 				handler(req, res);
 			})
 			.on("upgrade", (req, socket, head) => {
@@ -90,46 +90,45 @@ fastify.get("/api/ytSearch", async (request, reply) => {
 	}
 });
 
-// ── YouTube audio via yt-dlp ───────────────────────────────────────────
-import { spawn } from "node:child_process";
+// ── YouTube audio via Invidious API ───────────────────────────────────
+// Multiple Invidious instances for redundancy
+const INVIDIOUS_INSTANCES = [
+	"https://inv.nadeko.net",
+	"https://invidious.privacydev.net",
+	"https://iv.datura.network",
+	"https://invidious.nerdvpn.de",
+];
 
-const YT_DLP_ARGS = ["-f", "140/251/139/18", "--get-url", "--no-playlist", "--no-warnings", "--js-runtimes", "node", "--cookies", "/app/cookies.txt", "--extractor-args", "youtube:player_client=web,web_creator", "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"];
-
-function trySpawn(cmd, args, videoId) {
-	return new Promise((resolve, reject) => {
-		const proc = spawn(cmd, [...args, "https://www.youtube.com/watch?v=" + videoId], { shell: false });
-		let out = "", err = "";
-		proc.stdout.on("data", d => out += d);
-		proc.stderr.on("data", d => err += d);
-		proc.on("close", code => {
-			const url = out.trim().split("\n")[0].trim();
-			if (code === 0 && url.startsWith("http")) resolve(url);
-			else reject(Object.assign(new Error(err.trim().slice(0, 300) || "exit " + code), { isEnoent: false }));
-		});
-		proc.on("error", e => reject(Object.assign(new Error("ENOENT"), { isEnoent: true })));
-		setTimeout(() => { try { proc.kill(); } catch {} reject(new Error("timeout")); }, 25000);
-	});
-}
-
-async function ytdlpGetUrl(videoId) {
-	// py is the Windows launcher — try it first so we never hit the Windows Store python stub
-	const attempts = [
-		() => trySpawn("py",      ["-m", "yt_dlp", ...YT_DLP_ARGS], videoId),
-		() => trySpawn("yt-dlp",  YT_DLP_ARGS, videoId),
-		() => trySpawn("python3", ["-m", "yt_dlp", ...YT_DLP_ARGS], videoId),
-		() => trySpawn("python",  ["-m", "yt_dlp", ...YT_DLP_ARGS], videoId),
-	];
+async function getAudioUrlFromInvidious(videoId) {
 	let lastErr;
-	for (const attempt of attempts) {
-		try { return await attempt(); }
-		catch (e) {
-			if (e.isEnoent) continue; // command not found, try next
+	for (const instance of INVIDIOUS_INSTANCES) {
+		try {
+			const res = await fetch(`${instance}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`, {
+				headers: { "User-Agent": "Mozilla/5.0" },
+				signal: AbortSignal.timeout(8000),
+			});
+			if (!res.ok) continue;
+			const data = await res.json();
+			// Try adaptive audio formats first (best quality)
+			const adaptive = (data.adaptiveFormats || [])
+				.filter(f => f.type?.startsWith("audio/") && f.url)
+				.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+			if (adaptive.length) {
+				console.log(`[invidious] ✓ ${instance} → ${adaptive[0].type}`);
+				return adaptive[0].url;
+			}
+			// Fallback to combined format streams
+			const streams = (data.formatStreams || []).filter(f => f.url);
+			if (streams.length) {
+				console.log(`[invidious] ✓ ${instance} → stream fallback`);
+				return streams[streams.length - 1].url;
+			}
+		} catch (e) {
+			console.warn(`[invidious] ${instance} failed:`, e.message);
 			lastErr = e;
-			// If yt-dlp ran but the video is unavailable, no point retrying other cmds
-			if (e.message.includes("not available") || e.message.includes("Private video")) throw e;
 		}
 	}
-	throw lastErr || new Error("yt-dlp not found — install with: pip install yt-dlp");
+	throw lastErr || new Error("All Invidious instances failed");
 }
 
 fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
@@ -138,8 +137,8 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 		return reply.code(400).send({ error: "invalid videoId" });
 	}
 	try {
-		const cdnUrl = await ytdlpGetUrl(videoId);
-		console.log(`[yt-dlp] ✓ streaming ${videoId}`);
+		const cdnUrl = await getAudioUrlFromInvidious(videoId);
+		console.log(`[ytAudio] ✓ streaming ${videoId}`);
 
 		const cdnRes = await fetch(cdnUrl, {
 			headers: {
@@ -150,11 +149,11 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 		});
 
 		if (!cdnRes.ok && cdnRes.status !== 206) {
-			console.error(`[yt-dlp] CDN ${cdnRes.status}`);
+			console.error(`[ytAudio] CDN ${cdnRes.status}`);
 			return reply.code(502).send({ error: "CDN " + cdnRes.status });
 		}
 
-		const ct = cdnRes.headers.get("content-type") || "audio/webm";
+		const ct = cdnRes.headers.get("content-type") || "audio/mp4";
 		const cl = cdnRes.headers.get("content-length");
 		const cr = cdnRes.headers.get("content-range");
 		reply.code(cdnRes.status)
