@@ -90,148 +90,89 @@ fastify.get("/api/ytSearch", async (request, reply) => {
 	}
 });
 
-// ── YouTube audio extraction + stream proxy ────────────────────────────
-// Extracts direct audio URL from YouTube using the TV client (most reliable,
-// returns unthrottled URLs), then proxies the audio through our server so
-// the browser can play it with a plain <audio> element — no iframe needed.
+// ── YouTube audio via yt-dlp ───────────────────────────────────────────
+import { spawn } from "node:child_process";
 
-async function getYouTubeAudioUrl(videoId) {
-	// Try multiple innertube clients — TV client is most reliable for audio
-	// WEB_EMBEDDED client gives browser-playable URLs (no c=ANDROID that gets 403'd)
-	const clients = [
-		{
-			clientName: "WEB_EMBEDDED_PLAYER",
-			clientVersion: "2.20240101.09.00",
-			clientNameNum: "56",
-			userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-			extraHeaders: {
-				"Origin": "https://www.youtube.com",
-				"Referer": "https://www.youtube.com/embed/" + videoId,
-			},
-		},
-		{
-			clientName: "WEB",
-			clientVersion: "2.20240101.09.00",
-			clientNameNum: "1",
-			userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-			extraHeaders: {
-				"Origin": "https://www.youtube.com",
-				"Referer": "https://www.youtube.com/watch?v=" + videoId,
-			},
-		},
-		{
-			clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
-			clientVersion: "2.0",
-			clientNameNum: "85",
-			userAgent: "Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1",
-			extraHeaders: {
-				"Origin": "https://www.youtube.com",
-				"Referer": "https://www.youtube.com/",
-			},
-		},
-	];
+const YT_DLP_ARGS = ["-f", "bestaudio", "--get-url", "--no-playlist", "--no-warnings"];
 
-	for (const client of clients) {
-		try {
-			const body = {
-				videoId,
-				context: {
-					client: {
-						clientName: client.clientName,
-						clientVersion: client.clientVersion,
-						hl: "en",
-						gl: "US",
-					},
-				},
-			};
-			const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"User-Agent": client.userAgent,
-					"X-YouTube-Client-Name": client.clientNameNum,
-					"X-YouTube-Client-Version": client.clientVersion,
-					...client.extraHeaders,
-				},
-				body: JSON.stringify(body),
-				signal: AbortSignal.timeout(10000),
-			});
-
-			if (!res.ok) { console.log(`[yt] ${client.clientName} HTTP ${res.status}`); continue; }
-
-			const data = await res.json();
-			const status = data?.playabilityStatus?.status;
-			if (status !== "OK") { console.log(`[yt] ${client.clientName} status: ${status}`); continue; }
-
-			const formats = data?.streamingData?.adaptiveFormats || [];
-			const audioFormats = formats
-				.filter(f => f.mimeType?.startsWith("audio") && f.url)
-				.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-
-			if (audioFormats.length) {
-				console.log(`[yt] got audio via ${client.clientName}, bitrate: ${audioFormats[0].bitrate}`);
-				return audioFormats[0].url;
-			}
-			console.log(`[yt] ${client.clientName} no direct URL`);
-		} catch (e) {
-			console.log(`[yt] ${client.clientName} error: ${e.message}`);
-		}
-	}
-	return null;
+function trySpawn(cmd, args, videoId) {
+	return new Promise((resolve, reject) => {
+		const proc = spawn(cmd, [...args, "https://www.youtube.com/watch?v=" + videoId], { shell: false });
+		let out = "", err = "";
+		proc.stdout.on("data", d => out += d);
+		proc.stderr.on("data", d => err += d);
+		proc.on("close", code => {
+			const url = out.trim().split("\n")[0].trim();
+			if (code === 0 && url.startsWith("http")) resolve(url);
+			else reject(Object.assign(new Error(err.trim().slice(0, 300) || "exit " + code), { isEnoent: false }));
+		});
+		proc.on("error", e => reject(Object.assign(new Error("ENOENT"), { isEnoent: true })));
+		setTimeout(() => { try { proc.kill(); } catch {} reject(new Error("timeout")); }, 25000);
+	});
 }
 
-// Returns the direct audio URL (browser fetches it directly or via proxy)
+async function ytdlpGetUrl(videoId) {
+	// py is the Windows launcher — try it first so we never hit the Windows Store python stub
+	const attempts = [
+		() => trySpawn("py",      ["-m", "yt_dlp", ...YT_DLP_ARGS], videoId),
+		() => trySpawn("yt-dlp",  YT_DLP_ARGS, videoId),
+		() => trySpawn("python3", ["-m", "yt_dlp", ...YT_DLP_ARGS], videoId),
+		() => trySpawn("python",  ["-m", "yt_dlp", ...YT_DLP_ARGS], videoId),
+	];
+	let lastErr;
+	for (const attempt of attempts) {
+		try { return await attempt(); }
+		catch (e) {
+			if (e.isEnoent) continue; // command not found, try next
+			lastErr = e;
+			// If yt-dlp ran but the video is unavailable, no point retrying other cmds
+			if (e.message.includes("not available") || e.message.includes("Private video")) throw e;
+		}
+	}
+	throw lastErr || new Error("yt-dlp not found — install with: pip install yt-dlp");
+}
+
 fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 	const { videoId } = request.params;
 	if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
 		return reply.code(400).send({ error: "invalid videoId" });
 	}
 	try {
-		const url = await getYouTubeAudioUrl(videoId);
-		if (!url) return reply.code(404).send({ error: "no audio stream found" });
-		reply.send({ url });
+		const cdnUrl = await ytdlpGetUrl(videoId);
+		console.log(`[yt-dlp] ✓ streaming ${videoId}`);
+
+		const cdnRes = await fetch(cdnUrl, {
+			headers: {
+				"User-Agent": "Mozilla/5.0",
+				...(request.headers["range"] ? { "Range": request.headers["range"] } : {}),
+			},
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!cdnRes.ok && cdnRes.status !== 206) {
+			console.error(`[yt-dlp] CDN ${cdnRes.status}`);
+			return reply.code(502).send({ error: "CDN " + cdnRes.status });
+		}
+
+		const ct = cdnRes.headers.get("content-type") || "audio/webm";
+		const cl = cdnRes.headers.get("content-length");
+		const cr = cdnRes.headers.get("content-range");
+		reply.code(cdnRes.status)
+			.header("content-type", ct)
+			.header("accept-ranges", "bytes")
+			.header("cache-control", "no-cache")
+			.header("cross-origin-resource-policy", "same-origin");
+		if (cl) reply.header("content-length", cl);
+		if (cr) reply.header("content-range", cr);
+		return reply.send(cdnRes.body);
 	} catch (err) {
 		console.error("[ytAudio]", err.message);
 		reply.code(502).send({ error: err.message });
 	}
 });
 
-// Proxy audio bytes from googlevideo — must use exact same headers YouTube expects
 fastify.get("/api/ytProxy", async (request, reply) => {
-	const url = request.query.url;
-	if (!url || !url.includes("googlevideo.com")) {
-		return reply.code(400).send("invalid url");
-	}
-	try {
-		const fetchHeaders = {
-			"User-Agent": "com.google.android.youtube/19.30.36 (Linux; U; Android 11) gzip",
-			"Origin": "https://www.youtube.com",
-			"Referer": "https://www.youtube.com/",
-		};
-		if (request.headers["range"]) {
-			fetchHeaders["Range"] = request.headers["range"];
-		}
-		const upstream = await fetch(url, {
-			headers: fetchHeaders,
-			signal: AbortSignal.timeout(30000),
-		});
-		const ct = upstream.headers.get("content-type") || "audio/mp4";
-		const cl = upstream.headers.get("content-length");
-		const cr = upstream.headers.get("content-range");
-		reply
-			.code(upstream.status)
-			.header("content-type", ct)
-			.header("accept-ranges", "bytes")
-			.header("access-control-allow-origin", "*")
-			.header("cross-origin-resource-policy", "cross-origin");
-		if (cl) reply.header("content-length", cl);
-		if (cr) reply.header("content-range", cr);
-		// Stream directly without buffering entire file
-		reply.send(Buffer.from(await upstream.arrayBuffer()));
-	} catch (err) {
-		console.error("[ytProxy]", err.message);
-		reply.code(502).send();
-	}
+	reply.code(410).send({ error: "deprecated" });
 });
 
 // ── Image proxy ────────────────────────────────────────────────────────
