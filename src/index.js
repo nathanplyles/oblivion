@@ -90,104 +90,51 @@ fastify.get("/api/ytSearch", async (request, reply) => {
 	}
 });
 
-// ── YouTube audio via page scraping ────────────────────────────────────
-// Fetches the YouTube watch page and extracts ytInitialPlayerResponse
-// directly from the HTML. No yt-dlp, no API keys, no cookies needed.
-// URLs from the scrape are signed and work for ~6 hours.
+// ── YouTube audio via youtubei.js ─────────────────────────────────────
+import { Innertube } from "youtubei.js";
 
 const _urlCache = new Map(); // videoId -> { url, mime, expires }
+let _yt = null;
 
-async function scrapeYouTubeAudio(videoId) {
+async function getYT() {
+	if (!_yt) {
+		_yt = await Innertube.create({ retrieve_player: true });
+	}
+	return _yt;
+}
+
+async function innertubeGetAudio(videoId) {
 	const cached = _urlCache.get(videoId);
 	if (cached && cached.expires > Date.now()) {
-		console.log(`[scrape] cache hit for ${videoId}`);
+		console.log(`[ytjs] cache hit for ${videoId}`);
 		return cached;
 	}
+	console.log(`[ytjs] fetching info for ${videoId}`);
+	const yt = await getYT();
+	const info = await yt.getInfo(videoId, 'ANDROID');
+	const status = info?.playability_status?.status;
+	console.log(`[ytjs] playability: ${status}`);
+	if (status && status !== 'OK') throw new Error('Video not playable: ' + status);
 
-	// Try the embed page first — it's lighter and less bot-checked
-	const urls = [
-		`https://www.youtube.com/embed/${videoId}?autoplay=1`,
-		`https://www.youtube.com/watch?v=${videoId}`,
-	];
+	const formats = info?.streaming_data?.adaptive_formats || [];
+	const audioFormats = formats
+		.filter(f => f.mime_type?.startsWith('audio/') && f.url)
+		.sort((a, b) => (b.average_bitrate || b.bitrate || 0) - (a.average_bitrate || a.bitrate || 0));
 
-	for (const pageUrl of urls) {
-		try {
-			console.log(`[scrape] fetching ${pageUrl}`);
-			const res = await fetch(pageUrl, {
-				headers: {
-					"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-					"Accept-Language": "en-US,en;q=0.9",
-					"Accept": "text/html,application/xhtml+xml",
-				},
-				signal: AbortSignal.timeout(10000),
-			});
+	if (!audioFormats.length) throw new Error('No audio formats found');
 
-			if (!res.ok) {
-				console.log(`[scrape] ${pageUrl} returned ${res.status}`);
-				continue;
-			}
+	const best = audioFormats.find(f => f.itag === 140)
+		|| audioFormats.find(f => f.itag === 251)
+		|| audioFormats[0];
 
-			const html = await res.text();
-
-			// Extract ytInitialPlayerResponse JSON from the page
-			const match = html.match(/ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;/s)
-				|| html.match(/initialPlayerResponse\s*=\s*(\{.+?\})\s*;/s);
-
-			if (!match) {
-				console.log(`[scrape] no player response found in ${pageUrl}`);
-				continue;
-			}
-
-			let player;
-			try {
-				player = JSON.parse(match[1]);
-			} catch(e) {
-				console.log(`[scrape] JSON parse failed: ${e.message}`);
-				continue;
-			}
-
-			const status = player?.playabilityStatus?.status;
-			if (status && status !== "OK") {
-				console.log(`[scrape] playability: ${status}`);
-				continue;
-			}
-
-			const formats = [
-				...(player?.streamingData?.adaptiveFormats || []),
-				...(player?.streamingData?.formats || []),
-			];
-
-			// Audio-only formats sorted by bitrate descending
-			// itag 140 = AAC 128kbps, 251 = Opus 160kbps, 250 = Opus 70kbps
-			const audioFormats = formats
-				.filter(f => f.mimeType?.startsWith("audio/") && f.url)
-				.sort((a, b) => (b.averageBitrate || b.bitrate || 0) - (a.averageBitrate || a.bitrate || 0));
-
-			if (!audioFormats.length) {
-				console.log(`[scrape] no audio formats with direct urls found`);
-				continue;
-			}
-
-			const best = audioFormats.find(f => f.itag === 140)
-				|| audioFormats.find(f => f.itag === 251)
-				|| audioFormats[0];
-
-			console.log(`[scrape] ✓ ${videoId} itag=${best.itag} mime=${best.mimeType} bitrate=${best.averageBitrate || best.bitrate}`);
-
-			const result = {
-				url: best.url,
-				mime: best.mimeType?.split(";")[0] || "audio/mp4",
-				expires: Date.now() + 5 * 60 * 60 * 1000, // cache for 5 hours
-			};
-			_urlCache.set(videoId, result);
-			return result;
-
-		} catch(e) {
-			console.log(`[scrape] error on ${pageUrl}: ${e.message}`);
-		}
-	}
-
-	throw new Error("could not extract audio URL for " + videoId);
+	console.log(`[ytjs] ✓ itag=${best.itag} mime=${best.mime_type}`);
+	const result = {
+		url: best.url,
+		mime: best.mime_type?.split(';')[0] || 'audio/mp4',
+		expires: Date.now() + 5 * 60 * 60 * 1000,
+	};
+	_urlCache.set(videoId, result);
+	return result;
 }
 
 fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
@@ -196,7 +143,7 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 		return reply.code(400).send({ error: "invalid videoId" });
 	}
 	try {
-		const { url: cdnUrl, mime } = await scrapeYouTubeAudio(videoId);
+		const { url: cdnUrl, mime } = await innertubeGetAudio(videoId);
 		const rangeHeader = request.headers["range"];
 		const cdnRes = await fetch(cdnUrl, {
 			headers: {
