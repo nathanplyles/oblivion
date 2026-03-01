@@ -90,98 +90,132 @@ fastify.get("/api/ytSearch", async (request, reply) => {
 	}
 });
 
-// ── YouTube audio via yt-dlp ───────────────────────────────────────────
-import { spawn } from "node:child_process";
-
-const BASE_ARGS = [
-	"--get-url", "--no-playlist", "--no-warnings",
-	"--extractor-args", "youtube:player_client=ios",
-	"--add-header", "User-Agent:com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X)",
+// ── YouTube audio via Innertube API (no yt-dlp, no cookies) ───────────
+// Uses the Android embedded client which bypasses bot detection from
+// datacenter IPs and never requires authentication.
+const INNERTUBE_CLIENTS = [
+	{
+		name: "android_embedded",
+		key: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+		context: {
+			client: {
+				clientName: "ANDROID_EMBEDDED_PLAYER",
+				clientVersion: "17.36.4",
+				androidSdkVersion: 30,
+				hl: "en",
+				gl: "US",
+			},
+		},
+	},
+	{
+		name: "android",
+		key: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
+		context: {
+			client: {
+				clientName: "ANDROID",
+				clientVersion: "18.11.34",
+				androidSdkVersion: 30,
+				hl: "en",
+				gl: "US",
+			},
+		},
+	},
+	{
+		name: "tv_embedded",
+		key: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+		context: {
+			client: {
+				clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+				clientVersion: "2.0",
+				hl: "en",
+				gl: "US",
+			},
+		},
+	},
 ];
-const FORMAT_ATTEMPTS = [
-	["-f", "bestaudio"],
-	["-f", "140"],
-	["-f", "251"],
-	[],
-];
 
-function trySpawn(cmd, args, videoId) {
-	return new Promise((resolve, reject) => {
-		const fullArgs = [...args, "https://www.youtube.com/watch?v=" + videoId];
-		console.log(`[yt-dlp] spawning: ${cmd} ${fullArgs.join(" ")}`);
-		const proc = spawn(cmd, fullArgs, { shell: false });
-		let out = "", err = "";
-		proc.stdout.on("data", d => out += d);
-		proc.stderr.on("data", d => err += d);
-		proc.on("close", code => {
-			console.log(`[yt-dlp] exit ${code} | stdout: ${out.slice(0,120)} | stderr: ${err.slice(0,200)}`);
-			const url = out.trim().split("\n").find(l => l.startsWith("http")) || "";
-			if (code === 0 && url) resolve(url);
-			else reject(Object.assign(new Error(err.trim().slice(0, 300) || "exit " + code), { isEnoent: false }));
-		});
-		proc.on("error", e => {
-			console.log(`[yt-dlp] spawn error: ${e.message}`);
-			reject(Object.assign(new Error("ENOENT"), { isEnoent: true }));
-		});
-		setTimeout(() => { try { proc.kill("SIGKILL"); } catch {} reject(new Error("timeout")); }, 30000);
-	});
-}
+async function innertubeGetUrl(videoId) {
+	for (const client of INNERTUBE_CLIENTS) {
+		try {
+			console.log(`[innertube] trying client: ${client.name}`);
+			const res = await fetch(
+				`https://www.youtube.com/youtubei/v1/player?key=${client.key}&prettyPrint=false`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"User-Agent": "com.google.android.youtube/17.36.4 (Linux; U; Android 10) gzip",
+						"X-Youtube-Client-Name": "3",
+						"X-Youtube-Client-Version": client.context.client.clientVersion,
+					},
+					body: JSON.stringify({
+						videoId,
+						context: client.context,
+					}),
+					signal: AbortSignal.timeout(10000),
+				}
+			);
 
-async function ytdlpGetUrl(videoId) {
-	const cmds = [
-		{ cmd: "yt-dlp",  prefix: [] },
-		{ cmd: "python3", prefix: ["-m", "yt_dlp"] },
-		{ cmd: "python",  prefix: ["-m", "yt_dlp"] },
-		{ cmd: "py",      prefix: ["-m", "yt_dlp"] },
-	];
-
-	let foundCmd = null;
-	let lastErr;
-
-	for (const { cmd, prefix } of cmds) {
-		for (const fmtArgs of FORMAT_ATTEMPTS) {
-			const args = [...prefix, ...fmtArgs, ...BASE_ARGS];
-			try {
-				console.log(`[yt-dlp] trying ${cmd} with fmt=[${fmtArgs.join(" ")||"default"}]`);
-				const url = await trySpawn(cmd, args, videoId);
-				console.log(`[yt-dlp] ✓ success: ${cmd} fmt=[${fmtArgs.join(" ")||"default"}] url=${url.slice(0,80)}`);
-				return url;
-			} catch (e) {
-				console.log(`[yt-dlp] ✗ ${cmd} fmt=[${fmtArgs.join(" ")||"default"}]: ${e.message.slice(0,150)}`);
-				if (e.isEnoent) break;
-				lastErr = e;
+			if (!res.ok) {
+				console.log(`[innertube] ${client.name} HTTP ${res.status}`);
+				continue;
 			}
+
+			const data = await res.json();
+			const status = data?.playabilityStatus?.status;
+			console.log(`[innertube] ${client.name} playability: ${status}`);
+
+			if (status !== "OK") continue;
+
+			const formats = [
+				...(data?.streamingData?.adaptiveFormats || []),
+				...(data?.streamingData?.formats || []),
+			];
+
+			// Prefer audio-only formats: 140=AAC128k, 251=Opus160k, 250=Opus70k, 249=Opus50k
+			const audioOnly = formats.filter(f => f.mimeType?.startsWith("audio/") && !f.mimeType?.includes("video/"));
+			const preferred = audioOnly.find(f => f.itag === 140)
+				|| audioOnly.find(f => f.itag === 251)
+				|| audioOnly.find(f => f.itag === 250)
+				|| audioOnly[0]
+				|| formats[0];
+
+			if (!preferred?.url) {
+				console.log(`[innertube] ${client.name} no url in format`);
+				continue;
+			}
+
+			console.log(`[innertube] ✓ ${client.name} itag=${preferred.itag} mime=${preferred.mimeType}`);
+			return preferred.url;
+		} catch (e) {
+			console.log(`[innertube] ${client.name} error: ${e.message}`);
 		}
 	}
-	throw lastErr || new Error("yt-dlp not found");
+	throw new Error("all innertube clients failed");
 }
 
 fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 	const { videoId } = request.params;
-	console.log(`[ytAudio] request for videoId: ${videoId}`);
 	if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
-		console.log(`[ytAudio] invalid videoId: ${videoId}`);
 		return reply.code(400).send({ error: "invalid videoId" });
 	}
 	try {
-		console.log(`[ytAudio] calling ytdlpGetUrl...`);
-		const cdnUrl = await ytdlpGetUrl(videoId);
-		console.log(`[yt-dlp] ✓ got CDN url for ${videoId}: ${cdnUrl.slice(0, 100)}...`);
+		const cdnUrl = await innertubeGetUrl(videoId);
+		console.log(`[ytAudio] ✓ got url for ${videoId}`);
 
-		console.log(`[ytAudio] fetching CDN url...`);
 		const rangeHeader = request.headers["range"];
 		const cdnRes = await fetch(cdnUrl, {
 			headers: {
-				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+				"User-Agent": "com.google.android.youtube/17.36.4 (Linux; U; Android 10) gzip",
 				"Accept": "*/*",
-				"Accept-Language": "en-US,en;q=0.9",
+				"Accept-Encoding": "gzip, deflate",
+				"Origin": "https://www.youtube.com",
 				"Referer": "https://www.youtube.com/",
 				...(rangeHeader ? { "Range": rangeHeader } : {}),
 			},
 			signal: AbortSignal.timeout(30000),
 		});
 
-		console.log(`[ytAudio] CDN response: ${cdnRes.status}`);
 		if (!cdnRes.ok && cdnRes.status !== 206) {
 			return reply.code(502).send({ error: "CDN " + cdnRes.status });
 		}
@@ -198,7 +232,7 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 		if (cr) reply.header("content-range", cr);
 		return reply.send(cdnRes.body);
 	} catch (err) {
-		console.error("[ytAudio] FULL ERROR:", err);
+		console.error("[ytAudio] error:", err.message);
 		reply.code(502).send({ error: err.message });
 	}
 });
