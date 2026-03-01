@@ -90,108 +90,15 @@ fastify.get("/api/ytSearch", async (request, reply) => {
 	}
 });
 
-// ── YouTube audio via Innertube API (no yt-dlp, no cookies) ───────────
-// Uses the Android embedded client which bypasses bot detection from
-// datacenter IPs and never requires authentication.
-const INNERTUBE_CLIENTS = [
-	{
-		name: "android_embedded",
-		key: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-		context: {
-			client: {
-				clientName: "ANDROID_EMBEDDED_PLAYER",
-				clientVersion: "17.36.4",
-				androidSdkVersion: 30,
-				hl: "en",
-				gl: "US",
-			},
-		},
-	},
-	{
-		name: "android",
-		key: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
-		context: {
-			client: {
-				clientName: "ANDROID",
-				clientVersion: "18.11.34",
-				androidSdkVersion: 30,
-				hl: "en",
-				gl: "US",
-			},
-		},
-	},
-	{
-		name: "tv_embedded",
-		key: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-		context: {
-			client: {
-				clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
-				clientVersion: "2.0",
-				hl: "en",
-				gl: "US",
-			},
-		},
-	},
-];
+// ── YouTube audio via youtubei.js ──────────────────────────────────────
+import { Innertube } from "youtubei.js";
 
-async function innertubeGetUrl(videoId) {
-	for (const client of INNERTUBE_CLIENTS) {
-		try {
-			console.log(`[innertube] trying client: ${client.name}`);
-			const res = await fetch(
-				`https://www.youtube.com/youtubei/v1/player?key=${client.key}&prettyPrint=false`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						"User-Agent": "com.google.android.youtube/17.36.4 (Linux; U; Android 10) gzip",
-						"X-Youtube-Client-Name": "3",
-						"X-Youtube-Client-Version": client.context.client.clientVersion,
-					},
-					body: JSON.stringify({
-						videoId,
-						context: client.context,
-					}),
-					signal: AbortSignal.timeout(10000),
-				}
-			);
-
-			if (!res.ok) {
-				console.log(`[innertube] ${client.name} HTTP ${res.status}`);
-				continue;
-			}
-
-			const data = await res.json();
-			const status = data?.playabilityStatus?.status;
-			console.log(`[innertube] ${client.name} playability: ${status}`);
-
-			if (status !== "OK") continue;
-
-			const formats = [
-				...(data?.streamingData?.adaptiveFormats || []),
-				...(data?.streamingData?.formats || []),
-			];
-
-			// Prefer audio-only formats: 140=AAC128k, 251=Opus160k, 250=Opus70k, 249=Opus50k
-			const audioOnly = formats.filter(f => f.mimeType?.startsWith("audio/") && !f.mimeType?.includes("video/"));
-			const preferred = audioOnly.find(f => f.itag === 140)
-				|| audioOnly.find(f => f.itag === 251)
-				|| audioOnly.find(f => f.itag === 250)
-				|| audioOnly[0]
-				|| formats[0];
-
-			if (!preferred?.url) {
-				console.log(`[innertube] ${client.name} no url in format`);
-				continue;
-			}
-
-			console.log(`[innertube] ✓ ${client.name} itag=${preferred.itag} mime=${preferred.mimeType}`);
-			return preferred.url;
-		} catch (e) {
-			console.log(`[innertube] ${client.name} error: ${e.message}`);
-		}
+let _yt = null;
+async function getYT() {
+	if (!_yt) {
+		_yt = await Innertube.create({ retrieve_player: true });
 	}
-	throw new Error("all innertube clients failed");
+	return _yt;
 }
 
 fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
@@ -200,15 +107,27 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 		return reply.code(400).send({ error: "invalid videoId" });
 	}
 	try {
-		const cdnUrl = await innertubeGetUrl(videoId);
-		console.log(`[ytAudio] ✓ got url for ${videoId}`);
+		const yt = await getYT();
+		const info = await yt.getBasicInfo(videoId, { client: "ANDROID" });
+
+		const status = info.playability_status?.status;
+		if (status && status !== "OK") {
+			return reply.code(502).send({ error: "video not playable: " + status });
+		}
+
+		const format = info.chooseFormat({ type: "audio", quality: "best" });
+		if (!format) return reply.code(502).send({ error: "no audio format found" });
+
+		const cdnUrl = format.decipher(yt.session.player);
+		if (!cdnUrl) return reply.code(502).send({ error: "decipher failed" });
+
+		console.log(`[ytAudio] ✓ ${videoId} itag=${format.itag} mime=${format.mime_type}`);
 
 		const rangeHeader = request.headers["range"];
 		const cdnRes = await fetch(cdnUrl, {
 			headers: {
 				"User-Agent": "com.google.android.youtube/17.36.4 (Linux; U; Android 10) gzip",
 				"Accept": "*/*",
-				"Accept-Encoding": "gzip, deflate",
 				"Origin": "https://www.youtube.com",
 				"Referer": "https://www.youtube.com/",
 				...(rangeHeader ? { "Range": rangeHeader } : {}),
@@ -233,6 +152,8 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 		return reply.send(cdnRes.body);
 	} catch (err) {
 		console.error("[ytAudio] error:", err.message);
+		// Reset the instance so next request gets a fresh one
+		_yt = null;
 		reply.code(502).send({ error: err.message });
 	}
 });
