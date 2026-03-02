@@ -3,46 +3,42 @@ importScripts("/scram/scramjet.all.js");
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 
-self.addEventListener("install", () => self.skipWaiting());
+const WISP_URL = (self.location.protocol === "https:" ? "wss" : "ws") + "://" + self.location.host + "/wisp/";
 
-self.addEventListener("activate", (event) => {
-	event.waitUntil(
-		caches.keys()
-			.then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-			.then(() => self.clients.claim())
-	);
-});
+const DEFAULT_CONFIG = {
+  prefix: "/scramjet/",
+  codec: "plain",
+  wasm: "/scram/scramjet.wasm.wasm",
+  all: "/scram/scramjet.all.js",
+  sync: "/scram/scramjet.sync.js",
+  wisp: WISP_URL,
+};
 
-async function handleRequest(event) {
-	const url = event.request.url;
-	const origin = self.location.origin;
+let configLoaded = false;
 
-	if (event.request.mode === "navigate") return fetch(event.request);
-	if (url.startsWith(origin + "/")) return fetch(event.request);
-
-	if (
-		url.includes("youtube.com/iframe_api") ||
-		url.includes("ytimg.com") ||
-		url.includes("youtube.com/embed") ||
-		url.includes("cdn.jsdelivr.net") ||
-		url.includes("googlevideo.com") ||
-		url.includes("googleusercontent.com")
-	) {
-		return fetch(event.request);
-	}
-
-	try {
-		await scramjet.loadConfig();
-	} catch (e) {
-		return fetch(event.request);
-	}
-
-	if (scramjet.route(event)) {
-		return scramjet.fetch(event);
-	}
-	return fetch(event.request);
+async function ensureConfig() {
+  if (configLoaded) return;
+  try {
+    await scramjet.loadConfig();
+  } catch (e) {}
+  if (!scramjet.config) {
+    scramjet.config = DEFAULT_CONFIG;
+  } else {
+    scramjet.config.wisp = WISP_URL;
+    scramjet.config.wasm = scramjet.config.wasm || DEFAULT_CONFIG.wasm;
+    scramjet.config.all = scramjet.config.all || DEFAULT_CONFIG.all;
+    scramjet.config.sync = scramjet.config.sync || DEFAULT_CONFIG.sync;
+    scramjet.config.prefix = scramjet.config.prefix || DEFAULT_CONFIG.prefix;
+  }
+  configLoaded = true;
 }
 
 self.addEventListener("fetch", (event) => {
-	event.respondWith(handleRequest(event));
+  event.respondWith((async () => {
+    await ensureConfig();
+    if (scramjet.route(event)) {
+      return scramjet.fetch(event);
+    }
+    return fetch(event.request);
+  })());
 });

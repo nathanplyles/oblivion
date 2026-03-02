@@ -1,16 +1,19 @@
 import { createServer } from "node:http";
 import { fileURLToPath } from "url";
-import { hostname } from "node:os";
+import { hostname, tmpdir } from "node:os";
+import { spawn } from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
+
 import { scramjetPath } from "@mercuryworkshop/scramjet/path";
 import { libcurlPath } from "@mercuryworkshop/libcurl-transport";
+import { createRequire } from "node:module";
+const _require = createRequire(import.meta.url);
+const epoxyPath = new URL("../node_modules/@mercuryworkshop/epoxy-transport/dist/", import.meta.url).pathname;
 import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
-import { spawn } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 const publicPath = fileURLToPath(new URL("../public/", import.meta.url));
 
@@ -39,12 +42,10 @@ const fastify = Fastify({
 fastify.register(fastifyStatic, { root: publicPath, decorateReply: true });
 fastify.register(fastifyStatic, { root: scramjetPath, prefix: "/scram/", decorateReply: false });
 fastify.register(fastifyStatic, { root: libcurlPath, prefix: "/libcurl/", decorateReply: false });
+fastify.register(fastifyStatic, { root: epoxyPath, prefix: "/epoxy/", decorateReply: false });
 fastify.register(fastifyStatic, { root: baremuxPath, prefix: "/baremux/", decorateReply: false });
 
-<<<<<<< HEAD
 // ── Last.fm proxy ──────────────────────────────────────────────────────
-=======
->>>>>>> cb136b1f0ccfcb122928c9d4dc1a553f5426b685
 fastify.get("/api/lastfm", async (request, reply) => {
 	const key = process.env.LASTFM_API_KEY;
 	if (!key) return reply.code(503).send({ error: "LASTFM_API_KEY not set" });
@@ -59,10 +60,7 @@ fastify.get("/api/lastfm", async (request, reply) => {
 	}
 });
 
-<<<<<<< HEAD
 // ── iTunes proxy ───────────────────────────────────────────────────────
-=======
->>>>>>> cb136b1f0ccfcb122928c9d4dc1a553f5426b685
 fastify.get("/api/itunes", async (request, reply) => {
 	try {
 		const qs = request.raw.url.slice("/api/itunes?".length);
@@ -80,10 +78,7 @@ fastify.get("/api/itunes", async (request, reply) => {
 	}
 });
 
-<<<<<<< HEAD
 // ── YouTube search ─────────────────────────────────────────────────────
-=======
->>>>>>> cb136b1f0ccfcb122928c9d4dc1a553f5426b685
 fastify.get("/api/ytSearch", async (request, reply) => {
 	try {
 		const q = request.query.q || "";
@@ -102,16 +97,8 @@ fastify.get("/api/ytSearch", async (request, reply) => {
 	}
 });
 
-<<<<<<< HEAD
 // ── YouTube audio via yt-dlp ───────────────────────────────────────────
-import { spawn } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "url";
 
-=======
->>>>>>> cb136b1f0ccfcb122928c9d4dc1a553f5426b685
 const _urlCache = new Map();
 
 const _cookiesPath = (() => {
@@ -149,12 +136,7 @@ function trySpawn(cmd, args) {
 		proc.stdout.on("data", d => out += d);
 		proc.stderr.on("data", d => err += d);
 		proc.on("close", code => {
-<<<<<<< HEAD
-			const url = out.trim().split("
-")[0].trim();
-=======
 			const url = out.trim().split("\n")[0].trim();
->>>>>>> cb136b1f0ccfcb122928c9d4dc1a553f5426b685
 			if (code === 0 && url.startsWith("http")) resolve(url);
 			else reject(Object.assign(new Error(err.trim().slice(0, 300) || "exit " + code), { isEnoent: false }));
 		});
@@ -181,11 +163,7 @@ async function ytdlpGetUrl(videoId) {
 		try {
 			console.log(`[yt-dlp] trying: ${cmd}`);
 			const url = await trySpawn(cmd, args);
-<<<<<<< HEAD
 			console.log(`[yt-dlp] ✓ got url`);
-=======
-			console.log(`[yt-dlp] got url`);
->>>>>>> cb136b1f0ccfcb122928c9d4dc1a553f5426b685
 			_urlCache.set(videoId, { url, expires: Date.now() + 4 * 60 * 60 * 1000 });
 			return url;
 		} catch(e) {
@@ -203,8 +181,7 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 		return reply.code(400).send({ error: "invalid videoId" });
 	}
 	try {
-		const cdnUrl = await ytdlpGetUrl(videoId);
-		const mime = "audio/mp4";
+		const cdnUrl = await ytdlpGetUrl(videoId); const mime = "audio/mp4";
 		const rangeHeader = request.headers["range"];
 		const cdnRes = await fetch(cdnUrl, {
 			headers: {
@@ -217,10 +194,13 @@ fastify.get("/api/ytAudio/:videoId", async (request, reply) => {
 			},
 			signal: AbortSignal.timeout(30000),
 		});
+
 		if (!cdnRes.ok && cdnRes.status !== 206) {
+			// URL may have expired — clear cache and return error
 			_urlCache.delete(videoId);
 			return reply.code(502).send({ error: "CDN " + cdnRes.status });
 		}
+
 		const ct = cdnRes.headers.get("content-type") || mime;
 		const cl = cdnRes.headers.get("content-length");
 		const cr = cdnRes.headers.get("content-range");
@@ -242,10 +222,7 @@ fastify.get("/api/ytProxy", async (request, reply) => {
 	reply.code(410).send({ error: "deprecated" });
 });
 
-<<<<<<< HEAD
 // ── Image proxy ────────────────────────────────────────────────────────
-=======
->>>>>>> cb136b1f0ccfcb122928c9d4dc1a553f5426b685
 fastify.get("/api/img/*", async (request, reply) => {
 	try {
 		const imgPath = request.raw.url.slice("/api/img/".length);
@@ -264,10 +241,7 @@ fastify.get("/api/img/*", async (request, reply) => {
 	}
 });
 
-<<<<<<< HEAD
 // ── LRCLIB lyrics proxy ────────────────────────────────────────────────
-=======
->>>>>>> cb136b1f0ccfcb122928c9d4dc1a553f5426b685
 fastify.get("/api/lyrics", async (request, reply) => {
 	try {
 		const { track, artist, album, duration } = request.query;
@@ -292,14 +266,26 @@ fastify.get("/api/lyrics", async (request, reply) => {
 	}
 });
 
-<<<<<<< HEAD
 // ── AI proxy (Cerebras → Groq → Gemini Flash-Lite fallback chain) ──────
-=======
->>>>>>> cb136b1f0ccfcb122928c9d4dc1a553f5426b685
 const AI_PROVIDERS = [
-	{ name: "cerebras", envKey: "CEREBRAS_API_KEY", url: "https://api.cerebras.ai/v1/chat/completions", model: "llama-3.3-70b" },
-	{ name: "groq", envKey: "GROQ_API_KEY", url: "https://api.groq.com/openai/v1/chat/completions", model: "llama-3.3-70b-versatile" },
-	{ name: "gemini", envKey: "GEMINI_API_KEY", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-2.0-flash-lite" },
+	{
+		name: "cerebras",
+		envKey: "CEREBRAS_API_KEY",
+		url: "https://api.cerebras.ai/v1/chat/completions",
+		model: "llama-3.3-70b",
+	},
+	{
+		name: "groq",
+		envKey: "GROQ_API_KEY",
+		url: "https://api.groq.com/openai/v1/chat/completions",
+		model: "llama-3.3-70b-versatile",
+	},
+	{
+		name: "gemini",
+		envKey: "GEMINI_API_KEY",
+		url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+		model: "gemini-2.0-flash-lite",
+	},
 ];
 
 async function tryAIProvider(provider, messages, maxTokens) {
@@ -307,7 +293,10 @@ async function tryAIProvider(provider, messages, maxTokens) {
 	if (!key) throw new Error("no key configured");
 	const res = await fetch(provider.url, {
 		method: "POST",
-		headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
+		headers: {
+			"Authorization": "Bearer " + key,
+			"Content-Type": "application/json",
+		},
 		body: JSON.stringify({ model: provider.model, messages, max_tokens: maxTokens, stream: false }),
 		signal: AbortSignal.timeout(20000),
 	});
