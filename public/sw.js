@@ -1,44 +1,67 @@
-importScripts("/scram/scramjet.all.js");
+importScripts("/scram/scramjet.all.js?v=20260311b");
 
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
+let scramjetConfigPromise = null;
+const SCRAMJET_CACHE_MARKERS = ["scramjet", "$scramjet", "oblivion-sj"];
 
-const WISP_URL = (self.location.protocol === "https:" ? "wss" : "ws") + "://" + self.location.host + "/wisp/";
+function isScramjetCacheKey(key) {
+  const lower = String(key || "").toLowerCase();
+  return SCRAMJET_CACHE_MARKERS.some((marker) => lower.includes(marker));
+}
 
-const DEFAULT_CONFIG = {
-  prefix: "/scramjet/",
-  codec: "plain",
-  wasm: "/scram/scramjet.wasm.wasm",
-  all: "/scram/scramjet.all.js",
-  sync: "/scram/scramjet.sync.js",
-  wisp: WISP_URL,
-};
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((key) => isScramjetCacheKey(key)).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim()),
+  );
+});
 
-let configLoaded = false;
+async function handleRequest(event) {
+  const url = event.request.url;
+  const origin = self.location.origin;
 
-async function ensureConfig() {
-  if (configLoaded) return;
-  try {
-    await scramjet.loadConfig();
-  } catch (e) {}
-  if (!scramjet.config) {
-    scramjet.config = DEFAULT_CONFIG;
-  } else {
-    scramjet.config.wisp = WISP_URL;
-    scramjet.config.wasm = scramjet.config.wasm || DEFAULT_CONFIG.wasm;
-    scramjet.config.all = scramjet.config.all || DEFAULT_CONFIG.all;
-    scramjet.config.sync = scramjet.config.sync || DEFAULT_CONFIG.sync;
-    scramjet.config.prefix = scramjet.config.prefix || DEFAULT_CONFIG.prefix;
+  // Keep app/runtime internals out of proxy handling.
+  if (
+    url === `${origin}/sw.js` ||
+    url === `${origin}/scramjet/sw.js` ||
+    url === `${origin}/register-sw.js` ||
+    url.startsWith(`${origin}/api/`) ||
+    url.startsWith(`${origin}/scram/`) ||
+    url.startsWith(`${origin}/baremux/`) ||
+    url.startsWith(`${origin}/libcurl/`)
+  ) {
+    return fetch(event.request);
   }
-  configLoaded = true;
+
+  if (
+    url.includes("youtube.com/iframe_api") ||
+    url.includes("ytimg.com") ||
+    url.includes("youtube.com/embed") ||
+    url.includes("cdn.jsdelivr.net") ||
+    url.includes("googlevideo.com") ||
+    url.includes("googleusercontent.com")
+  ) {
+    return fetch(event.request);
+  }
+
+  try {
+    if (!scramjetConfigPromise) {
+      scramjetConfigPromise = scramjet.loadConfig();
+    }
+    await scramjetConfigPromise;
+  } catch {
+    scramjetConfigPromise = null;
+    return fetch(event.request);
+  }
+
+  if (scramjet.route(event)) return scramjet.fetch(event);
+  return fetch(event.request);
 }
 
 self.addEventListener("fetch", (event) => {
-  event.respondWith((async () => {
-    await ensureConfig();
-    if (scramjet.route(event)) {
-      return scramjet.fetch(event);
-    }
-    return fetch(event.request);
-  })());
+  event.respondWith(handleRequest(event));
 });

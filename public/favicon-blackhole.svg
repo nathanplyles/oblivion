@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="nearoblivion black hole favicon">
+  <defs>
+    <radialGradient id="horizon" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#000000"/>
+      <stop offset="0.62" stop-color="#030303"/>
+      <stop offset="0.84" stop-color="#0b0b0e"/>
+      <stop offset="1" stop-color="#16181d"/>
+    </radialGradient>
+    <linearGradient id="ringStroke" x1="60" y1="58" x2="198" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8f949d"/>
+      <stop offset="0.5" stop-color="#3f434b"/>
+      <stop offset="1" stop-color="#17191f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Broken accretion ring keeps strong negative space instead of a full closed shape. -->
+  <path
+    d="M48 130 C62 84, 106 58, 150 64 C186 68, 212 92, 218 122 C223 148, 208 172, 182 186"
+    fill="none"
+    stroke="url(#ringStroke)"
+    stroke-width="14"
+    stroke-linecap="round"
+  />
+
+  <!-- Event horizon -->
+  <circle cx="128" cy="128" r="54" fill="url(#horizon)"/>
+  <circle cx="128" cy="128" r="39" fill="#000000"/>
+</svg>
