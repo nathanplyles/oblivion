@@ -25,38 +25,77 @@ Ensure you are not hosting on a datacenter IP for CAPTCHAs to work reliably alon
 
 ## Setup / Usage
 
-You will need Node.js 16.x (and above) and Git installed; below is an example for Debian/Ubuntu setup.
+Use Node.js 22 LTS and `pnpm` for local development.
 
 ```
-sudo apt update
-sudo apt upgrade
-sudo apt install curl git nginx
+git clone https://github.com/MercuryWorkshop/Scramjet-App
+cd Scramjet-App
+```
 
+Install Node 22 (nvm)
+
+```
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-nvm install 20
-nvm use 20
-
-git clone https://github.com/MercuryWorkshop/Scramjet-App
-cd Scramjet-App
+nvm install 22
+nvm use 22
 ```
 
-Install dependencies
+Enable pnpm and install dependencies
 
 ```
+corepack enable
+corepack prepare pnpm@10.18.3 --activate
 pnpm install
 ```
 
-Run the server
+Create local secrets file (never commit this)
+
+```
+cp .env.example .env.local
+```
+
+On Windows PowerShell:
+
+```
+Copy-Item .env.example .env.local
+```
+
+Run with hot reload for local testing:
+
+```
+pnpm dev
+```
+
+Run production-like mode:
 
 ```
 pnpm start
 ```
 
-Resources for self-hosting:
+Server defaults to `http://localhost:8080`.
+Health check endpoint: `GET /healthz`.
+
+If port 8080 is already in use:
+
+PowerShell:
+
+```
+$env:PORT=3000; pnpm dev
+```
+
+Bash:
+
+```
+PORT=3000 pnpm dev
+```
+
+If any secrets were previously committed, rotate them at the provider and replace them in `.env.local`.
+
+Resources for self hosting:
 
 - https://github.com/nvm-sh/nvm
 - https://docs.titaniumnetwork.org/guides/nginx/

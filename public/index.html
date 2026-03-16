@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 <link rel="icon" type="image/svg+xml" href="/void-icon.svg">
+<link rel="stylesheet" href="/ux.css">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1169,97 +1170,7 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
 <div class="cursor-glow" id="cursorGlow"></div>
 <div class="cursor-dot" id="cursorDot"></div>
 
-<script>
-// ── CURSOR ────────────────────────────────────────────────────────────
-// Plain <script> isolated from module imports so it runs even if
-// scramjet/baremux fail on school Chromebooks with blocked extensions.
-(function() {
-  var glowEl = document.getElementById('cursorGlow');
-  var dotEl  = document.getElementById('cursorDot');
-  if (!glowEl || !dotEl) return;
-
-  var cx = -9999, cy = -9999;
-  var glowX = -9999, glowY = -9999;
-  var cursorVisible = false;
-  var trailVisible  = false;
-
-  var TRAIL_COUNT = 20;
-  var trailDots = [];
-  for (var ti = 0; ti < TRAIL_COUNT; ti++) {
-    var tel = document.createElement('div');
-    var tsize = Math.max(2, 7 - ti * 0.28);
-    tel.style.cssText = 'position:fixed;border-radius:50%;pointer-events:none;z-index:99997;will-change:transform;background:rgba(235,245,220,0.9);top:0;left:0;opacity:0;width:'+tsize+'px;height:'+tsize+'px;';
-    document.body.appendChild(tel);
-    trailDots.push({ el: tel, x: -9999, y: -9999 });
-  }
-
-  function isTyping() {
-    var t = document.activeElement && document.activeElement.tagName;
-    return t === 'INPUT' || t === 'TEXTAREA';
-  }
-
-  function onMove(e) {
-    if (e.pointerType === 'touch') return;
-    var nx = e.clientX, ny = e.clientY;
-    if (window._bgMouse) { window._bgMouse.x = nx; window._bgMouse.y = ny; }
-    if (!cursorVisible) {
-      cx = nx; cy = ny; glowX = nx; glowY = ny;
-      for (var i = 0; i < trailDots.length; i++) { trailDots[i].x = nx; trailDots[i].y = ny; }
-      cursorVisible = true; trailVisible = true;
-      glowEl.style.opacity = '1';
-      if (!isTyping()) dotEl.style.opacity = '1';
-    } else {
-      cx = nx; cy = ny;
-      if (!isTyping()) dotEl.style.opacity = '1';
-    }
-  }
-
-  window.addEventListener('mousemove',   onMove, { passive: true });
-  window.addEventListener('pointermove', onMove, { passive: true });
-
-  window.addEventListener('mouseleave', function() {
-    glowEl.style.opacity = '0'; dotEl.style.opacity = '0';
-    trailVisible = false; cursorVisible = false;
-  });
-
-  document.addEventListener('focusin', function(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-      dotEl.style.opacity = '0';
-      for (var i = 0; i < trailDots.length; i++) trailDots[i].el.style.opacity = '0';
-      trailVisible = false;
-    }
-  });
-  document.addEventListener('focusout', function(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-      if (cursorVisible) { dotEl.style.opacity = '1'; trailVisible = true; }
-    }
-  });
-
-  function animCursor() {
-    glowX += (cx - glowX) * 0.55;
-    glowY += (cy - glowY) * 0.55;
-    glowEl.style.transform = 'translate(calc('+glowX+'px - 50%), calc('+glowY+'px - 50%))';
-    dotEl.style.transform  = 'translate(calc('+cx+'px - 50%), calc('+cy+'px - 50%))';
-    requestAnimationFrame(animCursor);
-  }
-  animCursor();
-
-  function animTrail() {
-    trailDots[0].x += (cx - trailDots[0].x) * 0.88;
-    trailDots[0].y += (cy - trailDots[0].y) * 0.88;
-    for (var i = 1; i < TRAIL_COUNT; i++) {
-      trailDots[i].x += (trailDots[i-1].x - trailDots[i].x) * 0.72;
-      trailDots[i].y += (trailDots[i-1].y - trailDots[i].y) * 0.72;
-    }
-    for (var i = 0; i < TRAIL_COUNT; i++) {
-      trailDots[i].el.style.transform = 'translate(calc('+trailDots[i].x+'px - 50%), calc('+trailDots[i].y+'px - 50%))';
-      trailDots[i].el.style.opacity = trailVisible ? String((1 - i / TRAIL_COUNT) * 0.9) : '0';
-    }
-    requestAnimationFrame(animTrail);
-  }
-  animTrail();
-})();
-</script>
+<script src="/ux.js"></script>
 <div class="panic-flash" id="panicFlash"></div>
 
 <div id="toastContainer"></div>
@@ -1688,13 +1599,33 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
       <div class="scheme-options" id="schemeOptions"></div>
     </div>
 
+    <div class="settings-section">
+      <div class="settings-section-title">accessibility</div>
+      <label class="ux-toggle-row" for="nativeCursorToggle">
+        <span class="ux-toggle-copy">
+          <span class="ux-toggle-title">show system cursor</span>
+          <span class="ux-toggle-sub">disables the hidden custom cursor effect</span>
+        </span>
+        <input id="nativeCursorToggle" type="checkbox" class="ux-toggle-input">
+        <span class="ux-toggle-pill" aria-hidden="true"></span>
+      </label>
+      <label class="ux-toggle-row" for="reduceMotionToggle">
+        <span class="ux-toggle-copy">
+          <span class="ux-toggle-title">reduce motion</span>
+          <span class="ux-toggle-sub">cuts heavy animations and auto-switches to dots background</span>
+        </span>
+        <input id="reduceMotionToggle" type="checkbox" class="ux-toggle-input">
+        <span class="ux-toggle-pill" aria-hidden="true"></span>
+      </label>
+    </div>
+
 
 
     <div class="settings-section">
       <div class="settings-section-title">about</div>
-      <div style="font-size:11px;color:#555;line-height:1.8;letter-spacing:0.04em;">
+      <div style="font-size:11px;color:#8d95a3;line-height:1.8;letter-spacing:0.04em;">
         oblivion — between here and nowhere<br>
-        <a href="https://discord.gg/gmb2RegMTd" target="_blank" style="color:#666;text-decoration:none;transition:color 0.15s;cursor:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='#666'">discord ↗</a>
+        <a href="https://discord.gg/gmb2RegMTd" target="_blank" style="color:#8b93a1;text-decoration:none;transition:color 0.15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='#8b93a1'">discord ↗</a>
       </div>
     </div>
 
@@ -2012,6 +1943,7 @@ function drawDotGrid(){
 
 function startBg(name){
   if(bgAnimId)cancelAnimationFrame(bgAnimId);bgAnimId=null;ctx.clearRect(0,0,W,H);
+  if (document.documentElement.classList.contains('reduce-motion') && name !== 'dots') name = 'dots';
   currentBg=name;localStorage.setItem('oblivionBg',name);
   if(name==='particles'){initParticles();drawParticles();}
   else if(name==='rain'){initRain();drawRain();}
@@ -2021,6 +1953,10 @@ function startBg(name){
   document.querySelectorAll('.bg-option').forEach(o=>o.classList.toggle('active',o.dataset.bg===name));
 }
 startBg(currentBg);
+window.startBg = startBg;
+window.addEventListener('oblivion:motionchange', (e) => {
+  if (e.detail && e.detail.reduceMotion && currentBg !== 'dots') startBg('dots');
+});
 
 // preview thumbnails
 function drawPreview(type,c){

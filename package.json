@@ -4,11 +4,12 @@
 	"description": "The demo application for Scramjet, a high-performance web proxy.",
 	"type": "module",
 	"engines": {
-		"node": ">=18.0.0",
-		"npm": ">=7.0.0"
+		"node": ">=22.0.0",
+		"pnpm": ">=10.18.3"
 	},
 	"scripts": {
-		"start": "node src/index.js",
+		"start": "node --env-file=.env.local src/index.js",
+		"dev": "node --watch --env-file=.env.local src/index.js",
 		"format": "prettier --write .",
 		"lint": "eslint ./src/",
 		"lint:fix": "eslint ./src/ --fix"

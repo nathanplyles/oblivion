@@ -331,6 +331,10 @@ fastify.post("/api/ai", async (request, reply) => {
 	}
 });
 
+fastify.get("/healthz", async (_request, reply) => {
+	return reply.code(200).send({ status: "ok" });
+});
+
 fastify.setNotFoundHandler((req, reply) => {
 	return reply.code(404).type("text/html").sendFile("404.html");
 });
