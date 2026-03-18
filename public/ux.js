@@ -12,15 +12,24 @@
     motion: "oblivionReduceMotion",
     density: "oblivionDensity",
     theme: "oblivionThemeProfile",
+    bgSpeed: "oblivionBgSpeedV1",
+    bgDensity: "oblivionBgDensityV1",
+    bgFx: "oblivionBgFxV1",
     iconOrder: "oblivionHomeIconOrder",
     pinned: "oblivionPinnedScreens",
     tips: "oblivionTipsSeenV1",
+    onboardingPromptSeen: "oblivionOnboardingPromptSeenV1",
+    onboardingEnabled: "oblivionOnboardingEnabledV1",
+    onboardingSeenScreens: "oblivionOnboardingSeenScreensV1",
   };
 
   let cursorEnabled = readBool(KEYS.cursor, true);
   let motionPref = readEnum(KEYS.motion, ["1", "0"], null);
   let density = readEnum(KEYS.density, ["comfortable", "compact"], "comfortable");
   let themeProfile = readEnum(KEYS.theme, ["default", "high-contrast", "soft-glow", "minimal"], "default");
+  let bgSpeed = readNumber(KEYS.bgSpeed, 1, 0.6, 1.8);
+  let bgDensity = readNumber(KEYS.bgDensity, 1, 0.5, 1.7);
+  let bgFx = readNumber(KEYS.bgFx, 1, 0.4, 1.6);
 
   const statusState = {
     inflight: 0,
@@ -51,6 +60,17 @@
       const raw = localStorage.getItem(key);
       if (!raw) return fallback;
       return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  }
+
+  function readNumber(key, fallback, min, max) {
+    try {
+      const raw = localStorage.getItem(key);
+      const value = raw === null ? fallback : Number(raw);
+      if (!Number.isFinite(value)) return fallback;
+      return Math.max(min, Math.min(max, value));
     } catch {
       return fallback;
     }
@@ -96,13 +116,21 @@
     root.classList.toggle("reduce-motion", reduce);
     root.classList.toggle("motion-full", motionPref === "0");
     root.classList.toggle("is-mobile", isMobile());
+    root.dataset.motionForced = motionPref === "1" ? "1" : "0";
     applyDensityClass();
     applyThemeClass();
     window.dispatchEvent(
       new CustomEvent("oblivion:cursorchange", { detail: { enabled: cursorEnabled } }),
     );
     window.dispatchEvent(
-      new CustomEvent("oblivion:motionchange", { detail: { reduceMotion: reduce } }),
+      new CustomEvent("oblivion:motionchange", {
+        detail: { reduceMotion: reduce, forced: motionPref === "1" },
+      }),
+    );
+    window.dispatchEvent(
+      new CustomEvent("oblivion:bgprefschange", {
+        detail: { speed: bgSpeed, density: bgDensity, fx: bgFx },
+      }),
     );
   }
 
@@ -132,6 +160,16 @@
         ? nextTheme
         : "default";
     write(KEYS.theme, themeProfile);
+    applyPrefs();
+  }
+
+  function setBgPrefs(next) {
+    if (typeof next.speed === "number") bgSpeed = Math.max(0.6, Math.min(1.8, next.speed));
+    if (typeof next.density === "number") bgDensity = Math.max(0.5, Math.min(1.7, next.density));
+    if (typeof next.fx === "number") bgFx = Math.max(0.4, Math.min(1.6, next.fx));
+    write(KEYS.bgSpeed, String(bgSpeed));
+    write(KEYS.bgDensity, String(bgDensity));
+    write(KEYS.bgFx, String(bgFx));
     applyPrefs();
   }
 
@@ -182,13 +220,6 @@
             <option value="compact">compact</option>
           </select>
         </div>
-        <div class="ux-control-row">
-          <div class="ux-control-label">
-            command palette
-            <span class="ux-control-sub">quick actions and app switcher</span>
-          </div>
-          <button id="uxOpenPaletteBtn" class="ux-chip">open (ctrl/cmd+k)</button>
-        </div>
       </div>
     `;
 
@@ -198,6 +229,51 @@
     });
     if (aboutSection) settingsInner.insertBefore(section, aboutSection);
     else settingsInner.appendChild(section);
+  }
+
+  function ensureBackgroundTuningSection() {
+    const bgSection = [...document.querySelectorAll("#screen-settings .settings-section")].find((s) => {
+      const title = s.querySelector(".settings-section-title");
+      return title && title.textContent.trim().toLowerCase() === "background";
+    });
+    if (!bgSection || document.getElementById("uxBgTuneWrap")) return;
+
+    const wrap = document.createElement("div");
+    wrap.id = "uxBgTuneWrap";
+    wrap.className = "ux-bg-tune-wrap";
+    wrap.innerHTML = `
+      <div class="ux-control-row ux-range-row">
+        <div class="ux-control-label">
+          motion speed
+          <span class="ux-control-sub">slow it down or make it more alive</span>
+        </div>
+        <div class="ux-range-wrap">
+          <input id="uxBgSpeed" class="ux-range" type="range" min="0.6" max="1.8" step="0.05">
+          <span id="uxBgSpeedVal" class="ux-range-val">1.00x</span>
+        </div>
+      </div>
+      <div class="ux-control-row ux-range-row">
+        <div class="ux-control-label">
+          particle density
+          <span class="ux-control-sub">how populated backgrounds feel</span>
+        </div>
+        <div class="ux-range-wrap">
+          <input id="uxBgDensity" class="ux-range" type="range" min="0.5" max="1.7" step="0.05">
+          <span id="uxBgDensityVal" class="ux-range-val">1.00x</span>
+        </div>
+      </div>
+      <div class="ux-control-row ux-range-row">
+        <div class="ux-control-label">
+          visual effects
+          <span class="ux-control-sub">glow + highlight intensity</span>
+        </div>
+        <div class="ux-range-wrap">
+          <input id="uxBgFx" class="ux-range" type="range" min="0.4" max="1.6" step="0.05">
+          <span id="uxBgFxVal" class="ux-range-val">1.00x</span>
+        </div>
+      </div>
+    `;
+    bgSection.appendChild(wrap);
   }
 
   function organizeSettings() {
@@ -215,10 +291,9 @@
 
       const helpMap = {
         background: "Choose ambient visuals and animation style.",
-        "panic key": "Fast emergency exit with one key press.",
         "tab cloak": "Rename tab and icon for safer multitasking.",
         "color scheme": "Pick the accent and base visual direction.",
-        interface: "Set density, command tools, and profile style.",
+        interface: "Set spacing and profile style.",
         accessibility: "Cursor and motion controls live here.",
         about: "Project links and identity.",
       };
@@ -233,7 +308,7 @@
 
     const grouping = [
       { label: "Personalization", titles: ["background", "color scheme", "interface"] },
-      { label: "Safety", titles: ["panic key", "tab cloak"] },
+      { label: "Safety", titles: ["tab cloak"] },
       { label: "Accessibility", titles: ["accessibility"] },
       { label: "Info", titles: ["about"] },
     ];
@@ -258,7 +333,12 @@
     const reduceMotionToggle = document.getElementById("reduceMotionToggle");
     const densitySelect = document.getElementById("uxDensitySelect");
     const themeGroup = document.getElementById("uxThemeGroup");
-    const openPaletteBtn = document.getElementById("uxOpenPaletteBtn");
+    const bgSpeedInput = document.getElementById("uxBgSpeed");
+    const bgDensityInput = document.getElementById("uxBgDensity");
+    const bgFxInput = document.getElementById("uxBgFx");
+    const bgSpeedVal = document.getElementById("uxBgSpeedVal");
+    const bgDensityVal = document.getElementById("uxBgDensityVal");
+    const bgFxVal = document.getElementById("uxBgFxVal");
 
     if (nativeCursorToggle) {
       nativeCursorToggle.checked = !cursorEnabled;
@@ -291,11 +371,34 @@
       });
     }
 
-    if (openPaletteBtn) {
-      openPaletteBtn.addEventListener("click", () => {
-        if (typeof window.openPalette === "function") window.openPalette();
+    const updateBgLabels = () => {
+      if (bgSpeedVal) bgSpeedVal.textContent = `${bgSpeed.toFixed(2)}x`;
+      if (bgDensityVal) bgDensityVal.textContent = `${bgDensity.toFixed(2)}x`;
+      if (bgFxVal) bgFxVal.textContent = `${bgFx.toFixed(2)}x`;
+    };
+
+    if (bgSpeedInput) {
+      bgSpeedInput.value = String(bgSpeed);
+      bgSpeedInput.addEventListener("input", () => {
+        setBgPrefs({ speed: Number(bgSpeedInput.value) });
+        updateBgLabels();
       });
     }
+    if (bgDensityInput) {
+      bgDensityInput.value = String(bgDensity);
+      bgDensityInput.addEventListener("input", () => {
+        setBgPrefs({ density: Number(bgDensityInput.value) });
+        updateBgLabels();
+      });
+    }
+    if (bgFxInput) {
+      bgFxInput.value = String(bgFx);
+      bgFxInput.addEventListener("input", () => {
+        setBgPrefs({ fx: Number(bgFxInput.value) });
+        updateBgLabels();
+      });
+    }
+    updateBgLabels();
 
     makeKeyboardClickable(".app-icon, .bg-option");
   }
@@ -312,7 +415,7 @@
     let cursorVisible = false;
     let trailVisible = false;
 
-    const trailCount = 20;
+    const trailCount = isMobile() || (navigator.hardwareConcurrency || 4) <= 4 ? 10 : 16;
     const trailDots = [];
     for (let i = 0; i < trailCount; i++) {
       const trailEl = document.createElement("div");
@@ -394,19 +497,7 @@
       if (!cursorEnabled) hideCursorEffects();
     });
 
-    function animateCursor() {
-      if (cursorEnabled) {
-        glowX += (cx - glowX) * 0.55;
-        glowY += (cy - glowY) * 0.55;
-        glowEl.style.transform =
-          "translate(calc(" + glowX + "px - 50%), calc(" + glowY + "px - 50%))";
-        dotEl.style.transform =
-          "translate(calc(" + cx + "px - 50%), calc(" + cy + "px - 50%))";
-      }
-      requestAnimationFrame(animateCursor);
-    }
-
-    function animateTrail() {
+    function animateCursorFrame() {
       if (cursorEnabled) {
         trailDots[0].x += (cx - trailDots[0].x) * 0.88;
         trailDots[0].y += (cy - trailDots[0].y) * 0.88;
@@ -414,6 +505,12 @@
           trailDots[i].x += (trailDots[i - 1].x - trailDots[i].x) * 0.72;
           trailDots[i].y += (trailDots[i - 1].y - trailDots[i].y) * 0.72;
         }
+        glowX += (cx - glowX) * 0.55;
+        glowY += (cy - glowY) * 0.55;
+        glowEl.style.transform =
+          "translate(calc(" + glowX + "px - 50%), calc(" + glowY + "px - 50%))";
+        dotEl.style.transform =
+          "translate(calc(" + cx + "px - 50%), calc(" + cy + "px - 50%))";
         for (let i = 0; i < trailCount; i++) {
           trailDots[i].el.style.transform =
             "translate(calc(" + trailDots[i].x + "px - 50%), calc(" + trailDots[i].y + "px - 50%))";
@@ -424,11 +521,10 @@
       } else {
         for (let i = 0; i < trailDots.length; i++) trailDots[i].el.style.opacity = "0";
       }
-      requestAnimationFrame(animateTrail);
+      requestAnimationFrame(animateCursorFrame);
     }
 
-    animateCursor();
-    animateTrail();
+    animateCursorFrame();
   }
 
   function ensureStatusBar() {
@@ -717,6 +813,299 @@
       observer.observe(screen, { attributes: true, attributeFilter: ["class"] });
     });
     runForScreen();
+  }
+
+  const ONBOARDING_HINTS = {
+    home: [
+      { selector: ".app-grid", label: "apps", text: "open browser, games, music, ai, and settings here", place: "right" },
+      { selector: "#taskbar", label: "taskbar", text: "switch pages from here", place: "above-right" },
+    ],
+    browser: [
+      {
+        selector: ".browser-addr-row",
+        label: "search + address",
+        text: "type urls or search terms here",
+        place: "below-right",
+        avoid: ["#engineSelect", ".browser-bar"],
+      },
+    ],
+    games: [
+      { selector: "#gamesSearch", label: "search", text: "filter the game list quickly", place: "right" },
+      { selector: "#gamesGrid", label: "library", text: "choose a game tile to launch", place: "above-right" },
+    ],
+    music: [
+      { selector: "#musicSearch", label: "music search", text: "find tracks and artists", place: "right" },
+      { selector: "#musicQueueListRight", label: "up next", text: "queue and next songs", place: "left" },
+      { selector: ".music-playbar", label: "play controls", text: "play, seek, skip, and volume", place: "above-left" },
+    ],
+    account: [
+      { selector: "#aiConvoList", label: "chats", text: "open previous conversations", place: "right" },
+      { selector: "#aiInput", label: "prompt", text: "type and send your message", place: "above-right" },
+    ],
+    settings: [
+      { selector: "#bgOptions", label: "background mode", text: "switch background style", place: "right" },
+      { selector: "#uxBgTuneWrap", label: "background tuning", text: "adjust speed, density, and effects", place: "left" },
+      { selector: "#nativeCursorToggle", label: "cursor", text: "toggle system cursor on/off", place: "right" },
+      { selector: "#reduceMotionToggle", label: "motion", text: "reduce animation intensity", place: "right" },
+    ],
+  };
+
+  let coachOpenScreen = null;
+  let coachCleanup = null;
+
+  function readOnboardingSeenScreens() {
+    const seen = readJson(KEYS.onboardingSeenScreens, {});
+    return seen && typeof seen === "object" ? seen : {};
+  }
+
+  function markOnboardingSeen(screen) {
+    const seen = readOnboardingSeenScreens();
+    seen[screen] = 1;
+    writeJson(KEYS.onboardingSeenScreens, seen);
+  }
+
+  function setBgPause(paused) {
+    window.dispatchEvent(
+      new CustomEvent("oblivion:bgpause", {
+        detail: { paused: !!paused },
+      }),
+    );
+  }
+
+  function closePageCoach() {
+    const coach = document.getElementById("uxPageCoach");
+    if (coachCleanup) {
+      coachCleanup();
+      coachCleanup = null;
+    }
+    document.querySelectorAll(".ux-coach-target").forEach((el) => el.classList.remove("ux-coach-target"));
+    if (!coach) return;
+    coach.classList.remove("open");
+    setTimeout(() => coach.remove(), 90);
+    coachOpenScreen = null;
+  }
+
+  function showPageCoach(screenId) {
+    if (coachOpenScreen === screenId) return;
+    closePageCoach();
+    const hints = ONBOARDING_HINTS[screenId];
+    if (!Array.isArray(hints) || !hints.length) return;
+
+    const targets = hints
+      .map((hint) => ({ ...hint, el: document.querySelector(hint.selector), dismissed: false }))
+      .filter((hint) => !!hint.el);
+    if (!targets.length) return;
+
+    markOnboardingSeen(screenId);
+    coachOpenScreen = screenId;
+
+    const coach = document.createElement("div");
+    coach.id = "uxPageCoach";
+    coach.className = "ux-page-coach";
+    coach.innerHTML = `
+      <div class="ux-page-coach-layer" id="uxPageCoachLayer"></div>
+    `;
+    document.body.appendChild(coach);
+    requestAnimationFrame(() => coach.classList.add("open"));
+
+    const layer = coach.querySelector("#uxPageCoachLayer");
+    const pins = [];
+
+    function overlapArea(a, b) {
+      const x = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+      const y = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+      return x * y;
+    }
+
+    function candidatePos(name, rect, pinW, pinH, gap) {
+      if (name === "right") return { x: rect.right + gap, y: rect.top };
+      if (name === "left") return { x: rect.left - pinW - gap, y: rect.top };
+      if (name === "above") return { x: rect.left, y: rect.top - pinH - gap };
+      if (name === "below") return { x: rect.left, y: rect.bottom + gap };
+      if (name === "above-right") return { x: rect.right - pinW, y: rect.top - pinH - gap };
+      if (name === "above-left") return { x: rect.left, y: rect.top - pinH - gap };
+      if (name === "below-right") return { x: rect.right - pinW, y: rect.bottom + gap };
+      if (name === "below-left") return { x: rect.left, y: rect.bottom + gap };
+      if (name === "bottom-right") return { x: rect.right - pinW, y: rect.bottom - pinH };
+      if (name === "bottom-left") return { x: rect.left, y: rect.bottom - pinH };
+      return { x: rect.right + gap, y: rect.top };
+    }
+
+    function placePin(pin, rect, hint, allTargetRects, occupiedRects, avoidRects) {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const pinRect = pin.getBoundingClientRect();
+      const gap = 8;
+      const defaultOrder = [
+        "right",
+        "below-right",
+        "left",
+        "above-right",
+        "below-left",
+        "above-left",
+        "below",
+        "above",
+        "bottom-right",
+        "bottom-left",
+      ];
+      const pref = hint.place && typeof hint.place === "string" ? hint.place : null;
+      const order = pref ? [pref, ...defaultOrder.filter((p) => p !== pref)] : defaultOrder;
+
+      let best = null;
+      let bestPenalty = Number.POSITIVE_INFINITY;
+
+      order.forEach((slot) => {
+        const raw = candidatePos(slot, rect, pinRect.width, pinRect.height, gap);
+        const candidate = {
+          left: Math.max(8, Math.min(vw - pinRect.width - 8, raw.x)),
+          top: Math.max(8, Math.min(vh - pinRect.height - 8, raw.y)),
+          right: 0,
+          bottom: 0,
+        };
+        candidate.right = candidate.left + pinRect.width;
+        candidate.bottom = candidate.top + pinRect.height;
+
+        let penalty = 0;
+        allTargetRects.forEach((t) => {
+          penalty += overlapArea(candidate, t.rect) * 6;
+        });
+        avoidRects.forEach((avoidRect) => {
+          penalty += overlapArea(candidate, avoidRect) * 12;
+        });
+        occupiedRects.forEach((p) => {
+          penalty += overlapArea(candidate, p) * 10;
+        });
+
+        if (penalty < bestPenalty) {
+          bestPenalty = penalty;
+          best = candidate;
+        }
+      });
+
+      const chosen = best || {
+        left: Math.max(8, Math.min(vw - pinRect.width - 8, rect.right + gap)),
+        top: Math.max(8, Math.min(vh - pinRect.height - 8, rect.top)),
+      };
+      pin.style.left = chosen.left + "px";
+      pin.style.top = chosen.top + "px";
+      return {
+        left: chosen.left,
+        top: chosen.top,
+        right: chosen.left + pinRect.width,
+        bottom: chosen.top + pinRect.height,
+      };
+    }
+
+    function renderPins() {
+      pins.forEach((pin) => pin.remove());
+      pins.length = 0;
+      const visibleTargets = targets.filter((t) => !t.dismissed);
+      const allTargetRects = visibleTargets.map((t) => ({ selector: t.selector, rect: t.el.getBoundingClientRect() }));
+      const occupied = [];
+      visibleTargets.forEach((target) => {
+        const avoidRects = (target.avoid || [])
+          .map((sel) => document.querySelector(sel))
+          .filter((el) => !!el)
+          .map((el) => el.getBoundingClientRect());
+        target.el.classList.add("ux-coach-target");
+        const pin = document.createElement("div");
+        pin.className = "ux-page-pin";
+        pin.innerHTML = `<div class="ux-page-pin-label">${target.label}</div><div class="ux-page-pin-text">${target.text}</div>`;
+        layer.appendChild(pin);
+        const usedRect = placePin(
+          pin,
+          target.el.getBoundingClientRect(),
+          target,
+          allTargetRects,
+          occupied,
+          avoidRects,
+        );
+        occupied.push(usedRect);
+        pin.addEventListener("click", () => {
+          target.dismissed = true;
+          target.el.classList.remove("ux-coach-target");
+          pin.classList.add("dismiss");
+          setTimeout(() => {
+            pin.remove();
+            if (targets.every((t) => t.dismissed)) closePageCoach();
+          }, 90);
+        });
+        pins.push(pin);
+      });
+    }
+
+    const onResize = () => renderPins();
+    renderPins();
+    window.addEventListener("resize", onResize, { passive: true });
+    coachCleanup = () => window.removeEventListener("resize", onResize);
+  }
+
+  function maybeShowPageCoach() {
+    if (!readBool(KEYS.onboardingEnabled, false)) return;
+    const active = document.querySelector(".screen.active");
+    if (!active) return;
+    const screenId = active.id.replace("screen-", "");
+    const seen = readOnboardingSeenScreens();
+    if (seen[screenId]) return;
+    showPageCoach(screenId);
+  }
+
+  function initOnboardingObservers() {
+    const observer = new MutationObserver(() => {
+      const active = document.querySelector(".screen.active");
+      const nextScreen = active ? active.id.replace("screen-", "") : null;
+      if (!nextScreen) return;
+      if (coachOpenScreen && coachOpenScreen !== nextScreen) closePageCoach();
+      maybeShowPageCoach();
+    });
+    document.querySelectorAll(".screen").forEach((screen) => {
+      observer.observe(screen, { attributes: true, attributeFilter: ["class"] });
+    });
+    maybeShowPageCoach();
+  }
+
+  function initOnboardingPrompt() {
+    if (readBool(KEYS.onboardingPromptSeen, false)) return;
+    if (document.getElementById("uxWalkPrompt")) return;
+
+    const prompt = document.createElement("div");
+    prompt.id = "uxWalkPrompt";
+    prompt.className = "ux-walk-prompt";
+    prompt.innerHTML = `
+      <div class="ux-walk-prompt-card" role="dialog" aria-label="page tips prompt">
+        <div class="ux-walk-kicker">first launch</div>
+        <div class="ux-walk-title">enable first-time page tips?</div>
+        <div class="ux-walk-body">
+          each page shows quick labels once the first time you open it.
+        </div>
+        <div class="ux-walk-actions">
+          <button type="button" class="ux-tip-btn" id="uxWalkPromptSkip">no thanks</button>
+          <button type="button" class="ux-tip-btn primary" id="uxWalkPromptStart">enable tips</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(prompt);
+    requestAnimationFrame(() => prompt.classList.add("open"));
+    setBgPause(true);
+
+    const closePrompt = () => {
+      prompt.classList.remove("open");
+      setTimeout(() => prompt.remove(), 140);
+      setBgPause(false);
+    };
+
+    prompt.querySelector("#uxWalkPromptSkip")?.addEventListener("click", () => {
+      write(KEYS.onboardingPromptSeen, "1");
+      write(KEYS.onboardingEnabled, "0");
+      closePrompt();
+    });
+
+    prompt.querySelector("#uxWalkPromptStart")?.addEventListener("click", () => {
+      write(KEYS.onboardingPromptSeen, "1");
+      write(KEYS.onboardingEnabled, "1");
+      closePrompt();
+      setTimeout(() => maybeShowPageCoach(), 160);
+    });
   }
 
   function getScreensFromIcons() {
@@ -1040,8 +1429,9 @@
     patchGamesEmptyState();
     ensurePaneStates();
     mountSkeletons();
-    observeFirstRunTips();
     initStatusAndNetworkWatch();
+    initOnboardingObservers();
+    setTimeout(() => initOnboardingPrompt(), 180);
   }
 
   applyPrefs();
@@ -1072,6 +1462,7 @@
 
   window.addEventListener("DOMContentLoaded", () => {
     ensureInterfaceSection();
+    ensureBackgroundTuningSection();
     organizeSettings();
     bindSettings();
     initCommandPalette();

@@ -10,6 +10,7 @@
   --panel-radius: 12px;
   --focus-ring: rgba(var(--accent-rgb), 0.95);
   --focus-halo: rgba(var(--accent-rgb), 0.28);
+  --ux-smooth: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html.density-compact {
@@ -174,6 +175,22 @@ html.theme-minimal .settings-section {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--panel-radius);
   background: rgba(255, 255, 255, 0.03);
+  transition:
+    border-color 0.24s var(--ux-smooth),
+    background 0.24s var(--ux-smooth),
+    transform 0.24s var(--ux-smooth),
+    box-shadow 0.24s var(--ux-smooth);
+}
+
+#screen-settings .settings-section:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.045);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+}
+
+#settingsPanicSection {
+  display: none !important;
 }
 
 .ux-settings-group {
@@ -286,6 +303,35 @@ html.theme-minimal .settings-section {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.ux-bg-tune-wrap {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ux-range-row {
+  align-items: flex-start;
+}
+
+.ux-range-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 170px;
+}
+
+.ux-range {
+  width: 120px;
+  accent-color: rgb(var(--accent-rgb));
+}
+
+.ux-range-val {
+  width: 44px;
+  text-align: right;
+  font-size: 10px;
+  color: #a7b0be;
+}
+
 .ux-control-label {
   display: flex;
   flex-direction: column;
@@ -328,6 +374,17 @@ html.theme-minimal .settings-section {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.05em;
+  transition:
+    transform 0.2s var(--ux-smooth),
+    border-color 0.2s var(--ux-smooth),
+    background 0.2s var(--ux-smooth),
+    color 0.2s var(--ux-smooth);
+}
+
+.ux-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #d8e0ed;
 }
 
 .ux-chip.active {
@@ -458,6 +515,131 @@ html.theme-minimal .settings-section {
   color: #051106;
   background: rgba(var(--accent-rgb), 0.92);
   border-color: rgba(var(--accent-rgb), 0.75);
+}
+
+/* First-run walkthrough prompt + guided tour */
+.ux-walk-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 12600;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s var(--ux-smooth);
+}
+
+.ux-walk-prompt.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ux-walk-prompt-card,
+.ux-walk-card {
+  width: min(420px, calc(100vw - 24px));
+  border-radius: 16px;
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: rgba(8, 8, 12, 0.96);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.78),
+    0 0 34px rgba(var(--accent-rgb), 0.1);
+  padding: 14px 14px 12px;
+}
+
+.ux-walk-kicker {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: #8f99a8;
+  margin-bottom: 8px;
+}
+
+.ux-walk-title {
+  font-size: 16px;
+  color: #eef2f8;
+  letter-spacing: 0.01em;
+}
+
+.ux-walk-body {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #98a3b4;
+}
+
+.ux-walk-progress {
+  margin-top: 10px;
+  font-size: 10px;
+  color: #7d8899;
+  letter-spacing: 0.04em;
+}
+
+.ux-walk-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ux-page-coach {
+  position: fixed;
+  inset: 0;
+  z-index: 12640;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s var(--ux-smooth);
+}
+
+.ux-page-coach.open {
+  opacity: 1;
+}
+
+.ux-page-coach-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.ux-page-pin {
+  position: fixed;
+  z-index: 2;
+  min-width: 180px;
+  max-width: min(280px, calc(100vw - 16px));
+  border-radius: 10px;
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  background: rgba(8, 10, 14, 0.92);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.36), 0 0 20px rgba(var(--accent-rgb), 0.08);
+  padding: 9px 10px;
+  pointer-events: auto;
+  transition: opacity 0.1s var(--ux-smooth), transform 0.1s var(--ux-smooth);
+}
+
+.ux-page-pin.dismiss {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+.ux-page-pin-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: #edf2fb;
+}
+
+.ux-page-pin-text {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #b1bccd;
+}
+
+.ux-coach-target {
+  position: relative;
+  z-index: 12641 !important;
+  isolation: isolate;
+  outline: 2px solid rgba(var(--accent-rgb), 0.55);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.16), 0 0 20px rgba(var(--accent-rgb), 0.12);
 }
 
 /* Home icon drag + pin menu */
