@@ -6,7 +6,7 @@
 <title>oblivion</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
-<link rel="icon" type="image/svg+xml" href="/void-icon.svg">
+<link rel="icon" type="image/svg+xml" href="/oblivion-icon.svg">
 <link rel="stylesheet" href="/ux.css">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -113,19 +113,19 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
 
 .wordmark {
   font-family: var(--font-display);
-  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-size: clamp(2.2rem, 5vw, 3.35rem);
   color: var(--text); letter-spacing: -0.02em;
   text-shadow:
     0 0 20px rgba(255,255,255,0.35),
     0 0 60px rgba(255,255,255,0.15),
     0 0 140px rgba(200,240,160,0.08);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   opacity: 0; transform: translateY(10px);
   animation: fadeUp 0.7s ease forwards 0.2s;
 }
 .tagline {
-  font-size: 10px; color: #3a3a42; letter-spacing: 0.18em;
-  text-transform: uppercase; margin-bottom: 52px;
+  font-size: 11px; color: #3a3a42; letter-spacing: 0.18em;
+  text-transform: uppercase; margin-bottom: 56px;
   opacity: 0; transform: translateY(8px);
   animation: fadeUp 0.7s ease forwards 0.4s;
   text-shadow: 0 0 20px rgba(200,240,160,0.12);
@@ -135,10 +135,13 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
 /* App icon grid */
 .app-grid {
   display: grid;
-  grid-template-columns: repeat(5, 88px);
+  grid-template-columns: repeat(6, 88px);
   gap: 12px;
   opacity: 0; transform: translateY(10px);
   animation: fadeUp 0.7s ease forwards 0.55s;
+}
+@media (max-width: 760px) {
+  .app-grid { grid-template-columns: repeat(3, 88px); }
 }
 
 .app-icon {
@@ -291,12 +294,25 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
   border-radius: 7px; padding: 6px 12px; gap: 8px;
   transition: border-color 0.2s, box-shadow 0.2s;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 12px rgba(255,255,255,0.025);
+  forced-color-adjust: none;
 }
 .browser-addr-wrap:focus-within {
   border-color: rgba(var(--accent-rgb),0.35);
   box-shadow: 0 0 0 2px rgba(var(--accent-rgb),0.09), 0 0 18px rgba(var(--accent-rgb),0.06), inset 0 1px 0 rgba(255,255,255,0.06);
 }
-.browser-addr { flex: 1; background: none; border: none; outline: none; color: #ccc; font-family: var(--font-mono); font-size: 12px; }
+.browser-addr {
+  flex: 1;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  forced-color-adjust: none;
+  color: #ccc; font-family: var(--font-mono); font-size: 12px;
+}
+.browser-addr:focus,
+.browser-addr:focus-visible { outline: none !important; box-shadow: none !important; }
 .browser-addr::placeholder { color: #555; }
 
 .browser-go {
@@ -338,7 +354,10 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
   font-family: var(--font-display);
   font-size: clamp(2rem, 5vw, 3.2rem);
   color: var(--text); letter-spacing: -0.02em;
-  text-shadow: 0 0 60px rgba(255,255,255,0.14), 0 0 140px rgba(255,255,255,0.06);
+  text-shadow:
+    0 0 20px rgba(255,255,255,0.35),
+    0 0 60px rgba(255,255,255,0.15),
+    0 0 140px rgba(200,240,160,0.08);
   pointer-events: none; margin-bottom: 32px;
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
@@ -349,6 +368,7 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
   border-radius: 12px; padding: 12px 16px; margin-bottom: 28px;
   transition: border-color 0.2s, box-shadow 0.2s;
   box-shadow: 0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+  forced-color-adjust: none;
 }
 .newtab-search-wrap:focus-within {
   border-color: rgba(var(--accent-rgb),0.4);
@@ -357,9 +377,18 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
 .newtab-search-wrap svg { flex-shrink: 0; color: #555; transition: color 0.2s; }
 .newtab-search-wrap:focus-within svg { color: var(--accent); }
 .newtab-search-input {
-  flex: 1; background: none; border: none; outline: none;
+  flex: 1;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  forced-color-adjust: none;
   color: var(--text); font-family: var(--font-mono); font-size: 13px;
 }
+.newtab-search-input:focus,
+.newtab-search-input:focus-visible { outline: none !important; box-shadow: none !important; }
 .newtab-search-input::placeholder { color: #444; }
 .newtab-search-go {
   background: none; border: none; color: #444; font-family: var(--font-mono);
@@ -657,16 +686,50 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
   background: rgba(255,255,255,0.05); border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.06);
   padding: 9px 14px; margin: 0 8px 6px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  forced-color-adjust: none;
 }
-.music-search-box:focus-within { border-color: rgba(var(--accent-rgb),0.35); }
+.music-search-box:focus-within {
+  border-color: rgba(var(--accent-rgb),0.35);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb),0.2), 0 0 0 4px rgba(var(--accent-rgb),0.08);
+}
 .music-search-box svg { color: #444; flex-shrink: 0; transition: color 0.15s; }
 .music-search-box:focus-within svg { color: var(--accent); }
 .music-search-input-inner {
-  flex: 1; background: none; border: none; outline: none;
+  flex: 1;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  forced-color-adjust: none;
   color: #ccc; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em;
 }
+.music-search-input-inner:focus,
+.music-search-input-inner:focus-visible { outline: none !important; box-shadow: none !important; }
+.music-search-input-inner::-webkit-search-decoration,
+.music-search-input-inner::-webkit-search-cancel-button,
+.music-search-input-inner::-webkit-search-results-button,
+.music-search-input-inner::-webkit-search-results-decoration { display: none; }
 .music-search-input-inner::placeholder { color: #333; }
+.music-search-input-inner:-webkit-autofill,
+.music-search-input-inner:-webkit-autofill:hover,
+.music-search-input-inner:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ccc;
+  box-shadow: 0 0 0 1000px rgba(8,8,12,0.92) inset;
+  caret-color: #ccc;
+}
+.browser-addr:-webkit-autofill,
+.browser-addr:-webkit-autofill:hover,
+.browser-addr:-webkit-autofill:focus,
+.newtab-search-input:-webkit-autofill,
+.newtab-search-input:-webkit-autofill:hover,
+.newtab-search-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ccc;
+  box-shadow: 0 0 0 1000px rgba(8,8,12,0.92) inset;
+  caret-color: #ccc;
+}
 
 .music-playlist-list { padding: 0 8px 8px; flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.05) transparent; }
 .music-playlist-row {
@@ -1219,6 +1282,17 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
       <span class="icon-label">music</span>
     </div>
 
+    <div class="app-icon" data-href="/os/">
+      <div class="icon-tile">
+        <svg viewBox="0 0 30 30" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="6" width="22" height="14" rx="2"/>
+          <path d="M9 24h12"/>
+          <path d="M14 20l-1.5 4M16 20l1.5 4"/>
+        </svg>
+      </div>
+      <span class="icon-label">os</span>
+    </div>
+
     <div class="app-icon" data-screen="account">
       <div class="icon-tile">
         <svg viewBox="0 0 30 30" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
@@ -1455,55 +1529,11 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
       <div class="ai-sidebar-section">model</div>
       <div class="ai-model-wrap">
         <select class="ai-model-select" id="aiModelSelect">
-          <optgroup label="OpenAI">
-            <option value="openai/gpt-4o">GPT-4o</option>
-            <option value="openai/gpt-4o-mini">GPT-4o mini</option>
-            <option value="openai/o3-mini">o3-mini</option>
-            <option value="openai/o4-mini">o4-mini</option>
-          </optgroup>
-          <optgroup label="Anthropic">
-            <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
-            <option value="anthropic/claude-3-5-haiku">Claude 3.5 Haiku</option>
-            <option value="anthropic/claude-opus-4">Claude Opus 4</option>
-          </optgroup>
-          <optgroup label="Google">
-            <option value="google/gemini-2.5-pro-preview">Gemini 2.5 Pro</option>
-            <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash</option>
-            <option value="google/gemini-flash-1.5">Gemini 1.5 Flash</option>
-          </optgroup>
-          <optgroup label="Meta">
-            <option value="meta-llama/llama-4-maverick">Llama 4 Maverick</option>
-            <option value="meta-llama/llama-4-scout">Llama 4 Scout</option>
-            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
-            <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B (free)</option>
-          </optgroup>
-          <optgroup label="Mistral">
-            <option value="mistralai/mistral-large">Mistral Large</option>
-            <option value="mistralai/mistral-nemo">Mistral Nemo</option>
-            <option value="mistralai/mixtral-8x7b-instruct">Mixtral 8x7B</option>
-          </optgroup>
-          <optgroup label="DeepSeek">
-            <option value="deepseek/deepseek-chat-v3-0324">DeepSeek V3</option>
-            <option value="deepseek/deepseek-r1">DeepSeek R1</option>
-            <option value="deepseek/deepseek-r1-distill-llama-70b">DeepSeek R1 Llama 70B</option>
-          </optgroup>
-          <optgroup label="xAI">
-            <option value="x-ai/grok-3-beta">Grok 3</option>
-            <option value="x-ai/grok-3-mini-beta">Grok 3 Mini</option>
-          </optgroup>
-          <optgroup label="Free">
-            <option value="qwen/qwen3-235b-a22b:free">Qwen3 235B (free)</option>
-            <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (free)</option>
-            <option value="google/gemma-3-27b-it:free">Gemma 3 27B (free)</option>
-            <option value="microsoft/phi-4-reasoning-plus:free">Phi-4 Reasoning (free)</option>
-          </optgroup>
+          <option value="cerebras">Cerebras</option>
         </select>
       </div>
-      <div class="ai-sidebar-section">api key <span style="color:#2a2a2a;font-size:9px;">(openrouter)</span></div>
-      <div style="padding:0 12px 8px;">
-        <input class="ai-key-input" id="aiKeyInput" type="password" placeholder="sk-or-..." autocomplete="off" spellcheck="false">
-        <div style="font-size:9px;color:#2a2a2a;margin-top:4px;letter-spacing:0.04em;">get free key at openrouter.ai</div>
-      </div>
+      <div class="ai-sidebar-section">access</div>
+      <div style="padding:0 12px 8px;font-size:10px;color:#6f6f79;letter-spacing:0.04em;">public mode enabled: no API key required</div>
       <div class="ai-sidebar-section">history</div>
       <div class="ai-convo-list" id="aiConvoList"></div>
     </div>
@@ -1514,7 +1544,7 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
         <div class="ai-welcome">
           <div class="ai-welcome-icon">◈</div>
           <div class="ai-welcome-title">what can i help with?</div>
-          <div class="ai-welcome-sub">choose a model and start chatting</div>
+          <div class="ai-welcome-sub">start chatting instantly</div>
         </div>
       </div>
       <div class="ai-input-wrap">
@@ -1588,7 +1618,7 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
         <button class="cloak-preset" data-title="Choose a subject, i-Ready" data-icon="/favicons/iready.ico"><img src="/favicons/iready.ico" alt=""> i-ready</button>
         <button class="cloak-preset" data-title="NoodleTools - Projects" data-icon="/favicons/noodletools.ico"><img src="/favicons/noodletools.ico" alt=""> noodle</button>
         <button class="cloak-preset" data-title="Schoology" data-icon="/favicons/schoology.ico"><img src="/favicons/schoology.ico" alt=""> schoology</button>
-        <button class="cloak-preset active" data-title="oblivion" data-icon="/void-icon.svg"><img src="/void-icon.svg" alt=""> oblivion</button>
+      <button class="cloak-preset active" data-title="oblivion" data-icon="/oblivion-icon.svg"><img src="/oblivion-icon.svg" alt=""> oblivion</button>
       </div>
       <div class="cloak-label">custom icon url</div>
       <div class="input-row"><input id="cloakIcon" type="text" placeholder="https://example.com/favicon.ico" autocomplete="off" spellcheck="false"></div>
@@ -1665,6 +1695,13 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
       <path d="M7 15.5V5.5l10-2v10"/>
       <circle cx="5" cy="15.5" r="2"/><circle cx="15" cy="13.5" r="2"/>
+    </svg>
+  </button>
+  <button class="taskbar-btn" data-href="/os/" title="oblivion os">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="4" width="16" height="10" rx="1.5"/>
+      <path d="M7 17h6"/>
+      <path d="M9 14l-1 3M11 14l1 3"/>
     </svg>
   </button>
   <button class="taskbar-btn" data-screen="account" title="ai chat">
@@ -1803,9 +1840,9 @@ const bgPerfTier =
 const bgPerf = {
   low: {
     fps: 36,
-    particleArea: 15500,
-    particleMin: 55,
-    particleMax: 125,
+    particleArea: 13200,
+    particleMin: 70,
+    particleMax: 185,
     trailLength: 8,
     rainSpacing: 14,
     matrixSize: 14,
@@ -1816,9 +1853,9 @@ const bgPerf = {
   },
   balanced: {
     fps: 45,
-    particleArea: 12500,
-    particleMin: 70,
-    particleMax: 165,
+    particleArea: 10200,
+    particleMin: 90,
+    particleMax: 250,
     trailLength: 12,
     rainSpacing: 12,
     matrixSize: 13,
@@ -1829,9 +1866,9 @@ const bgPerf = {
   },
   high: {
     fps: 55,
-    particleArea: 9800,
-    particleMin: 85,
-    particleMax: 230,
+    particleArea: 7600,
+    particleMin: 110,
+    particleMax: 340,
     trailLength: 16,
     rainSpacing: 10,
     matrixSize: 13,
@@ -1864,7 +1901,7 @@ window.addEventListener('oblivion:bgprefschange', (e) => {
   if (!e.detail) return;
   const prevDensity = bgTune.density;
   bgTune.speed = Math.max(0.6, Math.min(1.8, Number(e.detail.speed || 1)));
-  bgTune.density = Math.max(0.5, Math.min(1.7, Number(e.detail.density || 1)));
+  bgTune.density = Math.max(0.5, Math.min(2.5, Number(e.detail.density || 1)));
   bgTune.fx = Math.max(0.4, Math.min(1.6, Number(e.detail.fx || 1)));
   if (Math.abs(prevDensity - bgTune.density) > 0.03) {
     clearTimeout(bgTuneRestartTimer);
@@ -1913,15 +1950,19 @@ function initParticles(){
   tick=0; trailIndex=0;
   const trailLength = bgPerf.trailLength;
   const density = bgTune.density;
+  const densityScale = Math.pow(density, 1.25) * 1.35;
   const fx = bgTune.fx;
   const particleCount = Math.min(
     bgPerf.particleMax,
-    Math.max(bgPerf.particleMin, Math.floor(((W*H)/bgPerf.particleArea) * density))
+    Math.max(bgPerf.particleMin, Math.floor(((W*H)/bgPerf.particleArea) * densityScale))
   );
   trail = Array.from({length:trailLength},()=>({x:-9999,y:-9999}));
   particles = Array.from({length:particleCount},()=>({
     x:Math.random()*W, y:Math.random()*H, vx:(Math.random()-0.5)*0.4, vy:(Math.random()-0.5)*0.4,
-    r:Math.random()*1.5+0.45, alpha:(Math.random()*0.3+0.08) * fx
+    r:Math.random()*1.6+0.5,
+    alpha:(Math.random()*0.24+0.14),
+    phase:Math.random()*Math.PI*2,
+    drift:Math.random()*0.8+0.4
   }));
 }
 function drawParticles(ts){
@@ -1933,15 +1974,22 @@ function drawParticles(ts){
   for(let i=0;i<trail.length;i++){
     const idx=(trailIndex-1-i+trail.length)%trail.length;
     const t=trail[idx]; if(t.x===-9999)continue;
-    const a=(1-i/trail.length)*0.15*fx;
+    const a=(1-i/trail.length)*0.19*fx;
     ctx.beginPath(); ctx.arc(t.x,t.y,(1-i/trail.length)*2.2,0,Math.PI*2);
     ctx.fillStyle=`rgba(200,240,160,${a})`; ctx.fill();
   }
   for(let p of particles){
+    // Keep particles gently alive even without mouse movement.
+    p.phase += 0.012 * p.drift * speedMul;
+    p.vx += Math.sin((tick * 0.013) + p.phase) * 0.0042 * p.drift * fx;
+    p.vy += Math.cos((tick * 0.011) + p.phase * 0.9) * 0.0042 * p.drift * fx;
     if(mouse.x!==-9999){
       const dx=mouse.x-p.x,dy=mouse.y-p.y,d2=dx*dx+dy*dy;
       if(d2<PARTICLE_LINK_DIST_SQ&&d2>0.001){const inv=1/Math.sqrt(d2);p.vx-=(dx*inv)*0.06*speedMul;p.vy-=(dy*inv)*0.06*speedMul;}
     }
+    const vMax = 0.72;
+    if(p.vx>vMax)p.vx=vMax; if(p.vx<-vMax)p.vx=-vMax;
+    if(p.vy>vMax)p.vy=vMax; if(p.vy<-vMax)p.vy=-vMax;
     p.vx*=0.99;p.vy*=0.99;p.x+=p.vx*speedMul;p.y+=p.vy*speedMul;
     if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;
   }
@@ -1950,11 +1998,13 @@ function drawParticles(ts){
       const dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y,d2=dx*dx+dy*dy;
       if(d2<PARTICLE_LINK_DIST_SQ){
         ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);ctx.lineTo(particles[j].x,particles[j].y);
-        ctx.strokeStyle=`rgba(200,240,160,${(1-d2/PARTICLE_LINK_DIST_SQ)*0.11*fx})`;ctx.lineWidth=0.56;ctx.stroke();
+        ctx.strokeStyle=`rgba(200,240,160,${(1-d2/PARTICLE_LINK_DIST_SQ)*0.15*fx})`;ctx.lineWidth=0.62;ctx.stroke();
       }
     }
+    const pulse = 0.84 + (Math.sin((tick * 0.02) + particles[i].phase) * 0.2);
+    const alpha = Math.min(0.8, particles[i].alpha * pulse * fx);
     ctx.beginPath();ctx.arc(particles[i].x,particles[i].y,particles[i].r,0,Math.PI*2);
-    ctx.fillStyle=`rgba(200,240,160,${particles[i].alpha})`;ctx.fill();
+    ctx.fillStyle=`rgba(200,240,160,${alpha})`;ctx.fill();
   }
   bgAnimId=requestAnimationFrame(drawParticles);
 }
@@ -2151,11 +2201,24 @@ function navigate(screenId) {
   document.querySelector('.taskbar-btn[data-screen="home"]').classList.toggle('active', screenId === 'home');
 }
 
+function openExternalScreen(url) {
+  const target = String(url || '').trim();
+  if (!target) return false;
+  window.location.href = target;
+  return true;
+}
+
 document.querySelectorAll('.app-icon').forEach(icon => {
-  icon.addEventListener('click', () => navigate(icon.dataset.screen));
+  icon.addEventListener('click', () => {
+    if (openExternalScreen(icon.dataset.href)) return;
+    navigate(icon.dataset.screen);
+  });
 });
 document.querySelectorAll('.taskbar-btn').forEach(btn => {
-  btn.addEventListener('click', () => navigate(btn.dataset.screen));
+  btn.addEventListener('click', () => {
+    if (openExternalScreen(btn.dataset.href)) return;
+    navigate(btn.dataset.screen);
+  });
 });
 
 // ── BROWSER ────────────────────────────────────────────────────────────
@@ -2177,22 +2240,21 @@ function createTab(url = null) {
     const _shortcuts = [
       { label: 'youtube', url: 'https://youtube.com', icon: '<path d="M15.8 7.6a2 2 0 00-1.4-1.4C13.2 6 10 6 10 6s-3.2 0-4.4.2A2 2 0 004.2 7.6C4 8.8 4 10 4 10s0 1.2.2 2.4a2 2 0 001.4 1.4C6.8 14 10 14 10 14s3.2 0 4.4-.2a2 2 0 001.4-1.4C16 11.2 16 10 16 10s0-1.2-.2-2.4zM8.5 12V8l3.5 2-3.5 2z" fill="rgba(255,255,255,0.6)"/>' },
       { label: 'google', url: 'https://google.com', icon: '<text x="10" y="14" text-anchor="middle" font-size="13" fill="rgba(255,255,255,0.6)" font-family="Arial,sans-serif" font-weight="700">G</text>' },
-      { label: 'reddit', url: 'https://reddit.com', icon: '<circle cx="10" cy="10.5" r="5.5" fill="rgba(255,255,255,0.6)"/><circle cx="8" cy="11" r="1" fill="#222"/><circle cx="12" cy="11" r="1" fill="#222"/><path d="M8 13q2 1.2 4 0" stroke="#222" stroke-width="0.8" fill="none" stroke-linecap="round"/><circle cx="10" cy="5.5" r="1.2" fill="rgba(255,255,255,0.6)"/><path d="M10 6.7v2.3" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>' },
-      { label: 'discord', url: 'https://discord.com', icon: '<path d="M13.5 5A10 10 0 007 4a10 10 0 00-5 1.2S1 7 1 9.5s.8 3 .8 3L3.5 14l.8-1.5h11.4l.8 1.5 1.7-1.5s.8-.5.8-3S15 5.2 15 5.2A10 10 0 0013.5 5zM6.5 11a1.3 1.3 0 110-2.6 1.3 1.3 0 010 2.6zm7 0a1.3 1.3 0 110-2.6 1.3 1.3 0 010 2.6z" fill="rgba(255,255,255,0.6)" transform="scale(0.9) translate(1,1)"/>' },
+      { label: 'reddit', url: 'https://reddit.com', icon: '<g transform="translate(1.2 1.2)"><circle cx="8.8" cy="9.4" r="5.2" fill="none" stroke="rgba(255,255,255,0.64)" stroke-width="1.1"/><circle cx="6.9" cy="9.4" r="0.86" fill="rgba(255,255,255,0.72)"/><circle cx="10.7" cy="9.4" r="0.86" fill="rgba(255,255,255,0.72)"/><path d="M6.7 11.45c.6.46 1.3.7 2.1.7s1.5-.24 2.1-.7" stroke="rgba(255,255,255,0.72)" stroke-width="0.88" fill="none" stroke-linecap="round"/><path d="M9.4 6.3l2.3.55" stroke="rgba(255,255,255,0.64)" stroke-width="0.92" stroke-linecap="round"/><circle cx="12.45" cy="6.1" r="0.95" fill="none" stroke="rgba(255,255,255,0.64)" stroke-width="0.92"/><path d="M6.2 8.95c.73-.55 1.95-.9 3.2-.9 1.25 0 2.47.35 3.2.9" stroke="rgba(255,255,255,0.64)" stroke-width="0.78" fill="none" stroke-linecap="round"/></g>' },
+      { label: 'discord', url: 'https://discord.com', icon: '<path d="M14.7 6.2a12.3 12.3 0 0 0-2.9-1l-.3.6c.9.2 1.7.5 2.3.9a8.8 8.8 0 0 0-7.6 0c.6-.4 1.4-.7 2.3-.9l-.3-.6a12.3 12.3 0 0 0-2.9 1C3.6 8.8 3.1 11.3 3.3 13.8a12 12 0 0 0 3.4 1.7l.7-1.1c-.6-.2-1.2-.5-1.7-.8l.4-.2c2.4 1.1 5.4 1.1 7.8 0l.4.2c-.5.3-1.1.6-1.7.8l.7 1.1a12 12 0 0 0 3.4-1.7c.2-2.9-.5-5.4-2-7.6z" fill="rgba(255,255,255,0.62)"/><circle cx="8.2" cy="10.8" r="1.05" fill="#171717"/><circle cx="11.8" cy="10.8" r="1.05" fill="#171717"/>' },
       { label: 'twitch', url: 'https://twitch.tv', icon: '<path d="M3 2L2 5v10h4v2h2.5L11 15h3l4-4V2H3zm12 8l-3 3H9L7 15v-2H4V4h11v6z" fill="rgba(255,255,255,0.6)" transform="scale(0.85) translate(1.5,1)"/><rect x="9.5" y="6.5" width="1.5" height="3.5" fill="rgba(255,255,255,0.6)" transform="scale(0.85) translate(1.5,1)"/><rect x="13" y="6.5" width="1.5" height="3.5" fill="rgba(255,255,255,0.6)" transform="scale(0.85) translate(1.5,1)"/>' },
     ];
     const _scHtml = _shortcuts.map(s =>
       `<div class="newtab-shortcut" data-url="${s.url}"><div class="newtab-shortcut-icon"><svg viewBox="0 0 20 20" width="22" height="22">${s.icon}</svg></div><span class="newtab-shortcut-label">${s.label}</span></div>`
     ).join('');
     frame.innerHTML = `<div class="newtab-page">
-      <div class="newtab-wordmark" id="newtab-wm-${id}">oblivion</div>
+      <div class="newtab-wordmark" id="newtab-wm-${id}">oblivion browser</div>
       <div class="newtab-search-wrap" id="newtab-sw-${id}">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" width="15" height="15"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M11 11l3 3"/></svg>
         <input class="newtab-search-input" id="newtab-si-${id}" placeholder="search the web..." autocomplete="off" spellcheck="false">
         <button class="newtab-search-go">go</button>
       </div>
       <div class="newtab-shortcuts">${_scHtml}</div>
-      <div class="newtab-hint" id="newtab-hint-${id}">oblivion browser</div>
     </div>`;
     const _ntIn = frame.querySelector('#newtab-si-' + id);
     const _ntGo = frame.querySelector('.newtab-search-go');
@@ -2474,14 +2536,15 @@ window.addEventListener('keydown', e => {
 });
 
 // ── CLOAK ──────────────────────────────────────────────────────────────
-let currentCloakIcon = '/void-icon.svg';
+let currentCloakIcon = '/oblivion-icon.svg';
 function setFavicon(url) {
   let link = document.querySelector("link[rel~='icon']");
   if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
   link.href = url;
 }
 const savedTitle = localStorage.getItem('oblivionCloakTitle');
-const savedIcon = localStorage.getItem('oblivionCloakIcon');
+const savedIconRaw = localStorage.getItem('oblivionCloakIcon');
+const savedIcon = savedIconRaw === '/void-icon.svg' ? '/oblivion-icon.svg' : savedIconRaw;
 if (savedTitle) document.title = savedTitle;
 if (savedIcon) { setFavicon(savedIcon); currentCloakIcon = savedIcon; }
 
@@ -2512,7 +2575,7 @@ const SCHEMES = [
   { id:'rose',     name:'rose',     accent:'#f9a8d4', rgb:'249,168,212', bg:'#060204', s1:'#0f0508', s2:'#190a10' },
   { id:'glacial',  name:'glacial',  accent:'#67e8f9', rgb:'103,232,249', bg:'#010507', s1:'#030d10', s2:'#07141e' },
   { id:'crimson',  name:'crimson',  accent:'#fca5a5', rgb:'252,165,165', bg:'#060101', s1:'#0f0404', s2:'#190808' },
-  { id:'void',     name:'void',     accent:'#a78bfa', rgb:'167,139,250', bg:'#020108', s1:'#06030f', s2:'#0d071c' },
+  { id:'eclipse',  name:'eclipse',  accent:'#a78bfa', rgb:'167,139,250', bg:'#020108', s1:'#06030f', s2:'#0d071c' },
   { id:'ash',      name:'ash',      accent:'#d4d4d8', rgb:'212,212,216', bg:'#020202', s1:'#080808', s2:'#0f0f0f' },
 ];
 
@@ -2536,7 +2599,8 @@ SCHEMES.forEach(s => {
   schemeGrid.appendChild(btn);
 });
 
-const savedScheme = localStorage.getItem('oblivionScheme') || 'midnight';
+const savedSchemeRaw = localStorage.getItem('oblivionScheme') || 'midnight';
+const savedScheme = savedSchemeRaw === 'void' ? 'eclipse' : savedSchemeRaw;
 function applyScheme(name) {
   document.body.className = document.body.className.replace(/scheme-\S+/g, '').trim();
   if (name !== 'midnight') document.body.classList.add('scheme-' + name);
@@ -2546,12 +2610,12 @@ function applyScheme(name) {
 applyScheme(savedScheme);
 
 document.getElementById('resetCloak').addEventListener('click', () => {
-  document.title = 'oblivion'; setFavicon('/void-icon.svg');
+  document.title = 'oblivion'; setFavicon('/oblivion-icon.svg');
   localStorage.removeItem('oblivionCloakTitle'); localStorage.removeItem('oblivionCloakIcon');
   document.getElementById('cloakTitle').value = ''; document.getElementById('cloakIcon').value = '';
   document.querySelectorAll('.cloak-preset').forEach(b => b.classList.remove('active'));
   document.querySelector('.cloak-preset[data-title="oblivion"]').classList.add('active');
-  currentCloakIcon = '/void-icon.svg';
+  currentCloakIcon = '/oblivion-icon.svg';
 });
 
 // ── MUSIC ───────────────────────────────────────────────────────────────
@@ -3013,10 +3077,47 @@ document.getElementById('musicRepeatHero')?.addEventListener('click', () => {
   document.getElementById('musicRepeatHero').classList.toggle('on', document.getElementById('musicRepeat').classList.contains('on'));
 });
 
+async function loadMusicHubTopTracks() {
+  const rightTitle = document.getElementById('musicRightTitle');
+  const rightList = document.getElementById('musicRightList');
+  if (!rightTitle || !rightList) return;
+  rightTitle.textContent = 'top tracks';
+  rightList.innerHTML = '<div class="music-results-empty">loading music...</div>';
+  try {
+    const data = await lastfmFetch({ method: 'chart.gettoptracks', limit: 20 });
+    const rawTracks = Array.isArray(data?.tracks?.track) ? data.tracks.track : [];
+    const tracks = rawTracks.map(t => {
+      const artistName = typeof t.artist === 'string' ? t.artist : (t.artist?.name || '');
+      return {
+        id: t.mbid || (artistName + '||' + t.name),
+        name: t.name,
+        artist: artistName,
+        duration_ms: parseInt(t.duration || 0) * 1000,
+        image: getLfmImage(t.image),
+      };
+    }).filter(t => t.name && t.artist);
+    if (!tracks.length) {
+      rightTitle.textContent = 'recently played';
+      rightList.innerHTML = '<div class="music-results-empty">play a song to see history</div>';
+      return;
+    }
+    renderTrackList(rightList, tracks, false);
+    enrichArt(tracks).then(enriched => {
+      if (!Array.isArray(enriched) || !enriched.length) return;
+      rightList.innerHTML = '';
+      renderTrackList(rightList, enriched, false);
+    });
+  } catch (err) {
+    rightTitle.textContent = 'recently played';
+    rightList.innerHTML = '<div class="music-results-empty">play a song to see history</div>';
+  }
+}
+
 function musicInit() {
   document.getElementById('musicApp').classList.add('ready');
-  document.getElementById('musicRightList').innerHTML = '<div class="music-results-empty">play a song to see history</div>';
+  document.getElementById('musicRightList').innerHTML = '<div class="music-results-empty">loading music...</div>';
   renderPlaylists();
+  loadMusicHubTopTracks();
 }
 
 // ── PLAYLISTS ─────────────────────────────────────────────────────────
@@ -3171,14 +3272,12 @@ function getActiveConvo() { return aiConversations.find(c => c.id === aiActiveId
 
 function aiInit() {
   document.getElementById('aiApp').classList.add('ready');
-  const savedKey = localStorage.getItem('oblivionOpenRouterKey') || '';
-  const savedModel = localStorage.getItem('oblivionAiModel') || 'google/gemini-2.0-flash-001';
-  document.getElementById('aiKeyInput').value = savedKey;
+  const savedModel = localStorage.getItem('oblivionAiModel') || 'cerebras';
   const sel = document.getElementById('aiModelSelect');
-  if (sel) { sel.value = savedModel; }
-  document.getElementById('aiKeyInput').addEventListener('change', e => {
-    localStorage.setItem('oblivionOpenRouterKey', e.target.value.trim());
-  });
+  if (sel) {
+    const hasSavedModel = [...sel.options].some(opt => opt.value === savedModel);
+    sel.value = hasSavedModel ? savedModel : 'cerebras';
+  }
   sel?.addEventListener('change', e => {
     localStorage.setItem('oblivionAiModel', e.target.value);
   });
@@ -3222,7 +3321,7 @@ function newConvo() {
     <div class="ai-welcome">
       <div class="ai-welcome-icon">◈</div>
       <div class="ai-welcome-title">what can i help with?</div>
-      <div class="ai-welcome-sub">choose a model and start chatting</div>
+      <div class="ai-welcome-sub">start chatting instantly</div>
     </div>`;
 }
 
@@ -3248,12 +3347,10 @@ function escAi(s) {
 
 async function aiSend() {
   if (aiStreaming) return;
-  const key = document.getElementById('aiKeyInput').value.trim() || localStorage.getItem('oblivionOpenRouterKey');
-  if (!key) { toast('add your OpenRouter API key in AI settings', 'error', 3000); return; }
   const input = document.getElementById('aiInput');
   const text = input.value.trim();
   if (!text) return;
-  const model = document.getElementById('aiModelSelect').value;
+  const preferredProvider = document.getElementById('aiModelSelect').value || 'cerebras';
 
   if (!aiActiveId) newConvo();
   const convo = getActiveConvo();
@@ -3276,56 +3373,35 @@ async function aiSend() {
   document.getElementById('aiSendBtn').disabled = true;
 
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const res = await fetch('/api/ai', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + key,
         'Content-Type': 'application/json',
-        'HTTP-Referer': location.origin,
-        'X-Title': 'oblivion',
       },
       body: JSON.stringify({
-        model,
         messages: convo.messages,
-        stream: true,
+        max_tokens: 1024,
+        preferred_provider: preferredProvider,
       }),
     });
 
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || 'API error ' + res.status);
+      const message = [data.error, data.detail].filter(Boolean).join(': ') || ('API error ' + res.status);
+      throw new Error(message);
     }
 
     thinking.remove();
-    let fullText = '';
-    const bubble = appendMessage('assistant', '');
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') break;
-        try {
-          const json = JSON.parse(data);
-          const delta = json.choices?.[0]?.delta?.content || '';
-          if (delta) { fullText += delta; bubble.innerHTML = escAi(fullText); msgs.scrollTop = msgs.scrollHeight; }
-        } catch {}
-      }
-    }
+    const fullText = typeof data.content === 'string' && data.content.trim()
+      ? data.content
+      : '[empty response]';
+    appendMessage('assistant', fullText);
 
     convo.messages.push({ role: 'assistant', content: fullText });
     saveAiConvos();
   } catch(e) {
     thinking.remove();
-    appendMessage('assistant', '⚠ ' + e.message);
+    appendMessage('assistant', '[error] ' + e.message);
     toast(e.message, 'error', 4000);
   } finally {
     aiStreaming = false;

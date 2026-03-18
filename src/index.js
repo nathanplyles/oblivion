@@ -1,8 +1,9 @@
-import { createServer } from "node:http";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { fileURLToPath } from "url";
 import { hostname, tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 import Fastify from "fastify";
@@ -16,6 +17,8 @@ const epoxyPath = new URL("../node_modules/@mercuryworkshop/epoxy-transport/dist
 import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
 
 const publicPath = fileURLToPath(new URL("../public/", import.meta.url));
+const oblivionOsPath = fileURLToPath(new URL("../../../oblivionOS/", import.meta.url));
+const hasOblivionOs = existsSync(oblivionOsPath) && existsSync(join(oblivionOsPath, "index.html"));
 
 logging.set_level(logging.NONE);
 Object.assign(wisp.options, {
@@ -24,9 +27,29 @@ Object.assign(wisp.options, {
 	dns_servers: ["1.1.1.3", "1.0.0.3"],
 });
 
+const sslKeyPath = process.env.SSL_KEY_PATH || "";
+const sslCertPath = process.env.SSL_CERT_PATH || "";
+const useHttps = Boolean(sslKeyPath && sslCertPath);
+let httpsOptions = null;
+if (useHttps) {
+	try {
+		httpsOptions = {
+			key: readFileSync(sslKeyPath, "utf8"),
+			cert: readFileSync(sslCertPath, "utf8"),
+		};
+		console.log(`[https] enabled with cert=${sslCertPath} key=${sslKeyPath}`);
+	} catch (error) {
+		console.error("[https] failed to read SSL cert/key files:", error.message);
+		process.exit(1);
+	}
+}
+
 const fastify = Fastify({
 	serverFactory: (handler) => {
-		return createServer()
+		const server = useHttps
+			? createHttpsServer(httpsOptions)
+			: createHttpServer();
+		return server
 			.on("request", (req, res) => {
 				res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
 				res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
@@ -44,6 +67,19 @@ fastify.register(fastifyStatic, { root: scramjetPath, prefix: "/scram/", decorat
 fastify.register(fastifyStatic, { root: libcurlPath, prefix: "/libcurl/", decorateReply: false });
 fastify.register(fastifyStatic, { root: epoxyPath, prefix: "/epoxy/", decorateReply: false });
 fastify.register(fastifyStatic, { root: baremuxPath, prefix: "/baremux/", decorateReply: false });
+if (hasOblivionOs) {
+	fastify.register(fastifyStatic, { root: oblivionOsPath, prefix: "/os/", decorateReply: false });
+}
+
+fastify.get("/os", async (_request, reply) => {
+	if (!hasOblivionOs) return reply.code(404).send({ error: "oblivionOS not found on server" });
+	return reply.redirect("/os/");
+});
+
+fastify.get("/os/", async (_request, reply) => {
+	if (!hasOblivionOs) return reply.code(404).send({ error: "oblivionOS not found on server" });
+	return reply.type("text/html").sendFile("index.html", oblivionOsPath);
+});
 
 // ── Last.fm proxy ──────────────────────────────────────────────────────
 fastify.get("/api/lastfm", async (request, reply) => {
@@ -272,21 +308,30 @@ const AI_PROVIDERS = [
 		name: "cerebras",
 		envKey: "CEREBRAS_API_KEY",
 		url: "https://api.cerebras.ai/v1/chat/completions",
-		model: "llama-3.3-70b",
-	},
-	{
-		name: "groq",
-		envKey: "GROQ_API_KEY",
-		url: "https://api.groq.com/openai/v1/chat/completions",
-		model: "llama-3.3-70b-versatile",
-	},
-	{
-		name: "gemini",
-		envKey: "GEMINI_API_KEY",
-		url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-		model: "gemini-2.0-flash-lite",
+		model: "llama3.1-8b",
 	},
 ];
+
+const AI_MAX_MESSAGES = 40;
+const AI_MAX_MESSAGE_CHARS = 12000;
+
+function normalizeAIMessages(messages) {
+	if (!Array.isArray(messages)) return [];
+	return messages
+		.slice(-AI_MAX_MESSAGES)
+		.map((message) => ({
+			role: message?.role === "assistant" ? "assistant" : "user",
+			content: String(message?.content ?? "").slice(0, AI_MAX_MESSAGE_CHARS),
+		}))
+		.filter((message) => message.content.trim().length > 0);
+}
+
+function getAIProvidersInOrder(preferredProviderName) {
+	if (!preferredProviderName) return AI_PROVIDERS;
+	const preferred = AI_PROVIDERS.find((provider) => provider.name === preferredProviderName);
+	if (!preferred) return AI_PROVIDERS;
+	return [preferred, ...AI_PROVIDERS.filter((provider) => provider.name !== preferredProviderName)];
+}
 
 async function tryAIProvider(provider, messages, maxTokens) {
 	const key = process.env[provider.envKey];
@@ -301,7 +346,10 @@ async function tryAIProvider(provider, messages, maxTokens) {
 		signal: AbortSignal.timeout(20000),
 	});
 	if (res.status === 429 || res.status === 503) throw new Error("quota/" + res.status);
-	if (!res.ok) throw new Error("http/" + res.status);
+	if (!res.ok) {
+		const errText = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 240);
+		throw new Error("http/" + res.status + (errText ? " " + errText : ""));
+	}
 	const data = await res.json();
 	const content = data?.choices?.[0]?.message?.content;
 	if (!content) throw new Error("empty response");
@@ -311,13 +359,28 @@ async function tryAIProvider(provider, messages, maxTokens) {
 fastify.post("/api/ai", async (request, reply) => {
 	try {
 		const body = request.body;
-		if (!body || !body.messages) return reply.code(400).send({ error: "messages required" });
+		const messages = normalizeAIMessages(body?.messages);
+		if (!messages.length) return reply.code(400).send({ error: "messages required" });
 		const maxTokens = Math.min(body.max_tokens || 1024, 4096);
+		const preferredProvider = typeof body?.preferred_provider === "string"
+			? body.preferred_provider.trim().toLowerCase()
+			: "";
+		const providersToTry = getAIProvidersInOrder(preferredProvider);
+		const configuredProviders = providersToTry.filter((provider) => {
+			const value = process.env[provider.envKey];
+			return typeof value === "string" && value.trim().length > 0;
+		});
+		if (!configuredProviders.length) {
+			return reply.code(503).send({
+				error: "AI is not configured on this server",
+				detail: "Set CEREBRAS_API_KEY in .env.local",
+			});
+		}
 		let lastErr;
-		for (const provider of AI_PROVIDERS) {
+		for (const provider of configuredProviders) {
 			try {
 				console.log(`[ai] trying ${provider.name}...`);
-				const result = await tryAIProvider(provider, body.messages, maxTokens);
+				const result = await tryAIProvider(provider, messages, maxTokens);
 				console.log(`[ai] success via ${provider.name}`);
 				return reply.send({ content: result.content, provider: result.provider });
 			} catch (e) {
@@ -341,10 +404,11 @@ fastify.setNotFoundHandler((req, reply) => {
 
 fastify.server.on("listening", () => {
 	const address = fastify.server.address();
+	const protocol = useHttps ? "https" : "http";
 	console.log("Listening on:");
-	console.log(`\thttp://localhost:${address.port}`);
-	console.log(`\thttp://${hostname()}:${address.port}`);
-	console.log(`\thttp://${address.family === "IPv6" ? `[${address.address}]` : address.address}:${address.port}`);
+	console.log(`\t${protocol}://localhost:${address.port}`);
+	console.log(`\t${protocol}://${hostname()}:${address.port}`);
+	console.log(`\t${protocol}://${address.family === "IPv6" ? `[${address.address}]` : address.address}:${address.port}`);
 });
 
 process.on("SIGINT", shutdown);
