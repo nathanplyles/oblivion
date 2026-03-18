@@ -1735,6 +1735,7 @@ a, button, input, select, textarea, label, [role="button"] { cursor: none !impor
 const SCRAMJET_REQUIRED_STORES = ["config", "cookies", "redirectTrackers", "referrerPolicies", "publicSuffixList"];
 const SCRAMJET_RETRY_PATTERN = /IDBDatabase|NotFoundError|object stores|transaction|timeout|timed out|not initialized|booting/i;
 const SCRAMJET_INIT_TIMEOUT_MS = 20000;
+const SCRAMJET_TRANSPORTS = ["/epoxy/index.mjs", "/libcurl/index.mjs"];
 
 function withTimeout(promise, ms, label) {
   return Promise.race([
@@ -1748,6 +1749,23 @@ function withSoftTimeout(promise, ms, fallbackValue = null) {
     Promise.resolve(promise).catch(() => fallbackValue),
     new Promise((resolve) => setTimeout(() => resolve(fallbackValue), ms)),
   ]);
+}
+
+async function setScramjetTransportWithFallback(connection, wispUrl) {
+  let lastErr = null;
+  for (const transportPath of SCRAMJET_TRANSPORTS) {
+    try {
+      await withTimeout(
+        connection.setTransport(transportPath, [{ wisp: wispUrl }]),
+        SCRAMJET_INIT_TIMEOUT_MS,
+        `transport timeout (${transportPath})`,
+      );
+      return transportPath;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error("no transport available");
 }
 
 function createScramjetStores(db) {
@@ -1913,11 +1931,8 @@ window._scramjetReady = (async () => {
 
     window._connection = new BareMux.BareMuxConnection('/baremux/worker.js');
     const wispUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/wisp/`;
-    await withTimeout(
-      window._connection.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]),
-      SCRAMJET_INIT_TIMEOUT_MS,
-      'scramjet transport timeout',
-    );
+    const transportPath = await setScramjetTransportWithFallback(window._connection, wispUrl);
+    window._scramjetTransportPath = transportPath;
     log('BareMuxConnection ready', true);
 
     try {
@@ -2558,7 +2573,7 @@ async function browserNavigate(url) {
     }
     // Set transport right before navigating (official pattern)
     const wispUrl = (location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/wisp/';
-    await connection.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+    await setScramjetTransportWithFallback(connection, wispUrl);
     tab.frame.innerHTML = '';
     const sjFrame = scramjet.createFrame();
     sjFrame.frame.style.cssText = 'width:100%;height:100%;border:none;';
