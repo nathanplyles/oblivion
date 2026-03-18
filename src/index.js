@@ -146,7 +146,9 @@ const _cookiesPath = (() => {
 	}
 	const candidates = [
 		process.env.COOKIES_PATH,
+		fileURLToPath(new URL("../../../cookies.txt", import.meta.url)).replace(/^\/([A-Z]:)/, "$1"),
 		"/home/ubuntu/cookies.txt",
+		"/var/www/oblivion/cookies.txt",
 		"/app/cookies.txt",
 		fileURLToPath(new URL("../../cookies.txt", import.meta.url)).replace(/^\/([A-Z]:)/, "$1"),
 		"cookies.txt",

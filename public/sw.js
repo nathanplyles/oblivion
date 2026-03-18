@@ -20,6 +20,18 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+async function safeFetch(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    return new Response("offline", {
+      status: 503,
+      statusText: "offline",
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+}
+
 async function handleRequest(event) {
   const url = event.request.url;
   const origin = self.location.origin;
@@ -34,7 +46,7 @@ async function handleRequest(event) {
     url.startsWith(`${origin}/baremux/`) ||
     url.startsWith(`${origin}/libcurl/`)
   ) {
-    return fetch(event.request);
+    return safeFetch(event.request);
   }
 
   if (
@@ -45,7 +57,7 @@ async function handleRequest(event) {
     url.includes("googlevideo.com") ||
     url.includes("googleusercontent.com")
   ) {
-    return fetch(event.request);
+    return safeFetch(event.request);
   }
 
   try {
@@ -55,13 +67,13 @@ async function handleRequest(event) {
     await scramjetConfigPromise;
   } catch {
     scramjetConfigPromise = null;
-    return fetch(event.request);
+    return safeFetch(event.request);
   }
 
   if (scramjet.route(event)) return scramjet.fetch(event);
-  return fetch(event.request);
+  return safeFetch(event.request);
 }
 
 self.addEventListener("fetch", (event) => {
-  event.respondWith(handleRequest(event));
+  event.respondWith(handleRequest(event).catch(() => safeFetch(event.request)));
 });
